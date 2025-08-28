@@ -1,10 +1,10 @@
 [![REUSE status](https://api.reuse.software/badge/github.com/SAP/machine-learning-multiple-imputation)](https://api.reuse.software/info/github.com/SAP/machine-learning-multiple-imputation)
 
-# Machine Learning Multiple Imputation
+# knnSampler
 
 ## About this project
 
-Machine learning based multiple imputation method with uncertainty quantification (significance level estimated confidence interval)
+Machine learning imputation method with multiple imputation and uncertainty quantification support based on k-NN.
 
 ## Requirements and Setup
 
