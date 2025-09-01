@@ -4,7 +4,7 @@
 
 ## About this project
 
-Machine learning imputation method with multiple imputation and uncertainty quantification support based on k-NN.
+Machine learning imputation method with multiple imputation and uncertainty quantification support based on kNN.
 
 ## Requirements and Setup
 
