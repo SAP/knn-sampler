@@ -6,9 +6,12 @@
 
 Machine learning imputation method with multiple imputation and uncertainty quantification support based on kNN.
 
+> [!NOTE]
+> This repository is currently a placeholder for the experiment results reproducibility associated to an upcoming publication.
+
 ## Requirements and Setup
 
-That repository is currently a placeholder for the experiment results reproducibility associated to an upcoming publication.
+To be written.
 
 ## Support, Feedback, Contributing
 
