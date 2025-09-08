@@ -8,7 +8,7 @@ Machine learning imputation method with multiple imputation and uncertainty quan
 
 ## Requirements and Setup
 
-That repository is currently a placeholder for the experiment results reproducibility associated to the [publication](https://...).
+That repository is currently a placeholder for the experiment results reproducibility associated to an upcoming publication.
 
 ## Support, Feedback, Contributing
 
