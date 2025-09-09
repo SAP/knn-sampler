@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
-        python: [3.12]
+        python: [3.12, 3.13]
     runs-on: ${{ matrix.os }}
     name : Build with Python ${{ matrix.python }} on ${{ matrix.os }}
   steps:
@@ -28,3 +28,6 @@ jobs:
     - name: Lint
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.python == '3.12' }}
       run: poetry run task lint
+    - name: Test
+      run: poetry run task test
+
