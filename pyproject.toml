@@ -1,0 +1,48 @@
+[project]
+name = "knnSampler"
+version = "0.0.1"
+description = ""
+authors = [
+  { name = "Jérôme Benoit", email = "jerome.benoit@sap.com" },
+  { name = "Antoine Maistre", email = "antoine.maistre@sap.com>"},
+  { name = "Parastoo Pashmchi", email = "parastoo.pashmchi@sap.com"}
+]
+readme = "README.md"
+package-mode = false
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "matplotlib>=3",
+    "numpy>=2",
+    "pandas>=2",
+    "seaborn>=0.13",
+    "scikit-learn>=1",
+    "openpyxl>=3",
+    "tabulate (>=0.9.0,<0.10.0)",
+    "tqdm>=4",
+  ]
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^4"
+taskipy = "^1"
+ruff = "^0.12"
+pytest = "^8"
+line-profiler = "^4"
+
+[tool.taskipy.tasks]
+main = "poetry run python main.py"
+test = "poetry run pytest"
+benchmark_all = "poetry run python benchmark_all.py"
+benchmark_knnsampler = "poetry run python benchmark_knnsampler.py"
+format = "ruff check --fix . && ruff format ."
+lint = "ruff check --diff . && ruff format --check --diff ."
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "ASYNC", "S", "B", "A", "Q", "RUF", "I"]
+ignore = ["E501"] # ignore line too long
+
+[tool.pytest.ini_options]
+pythonpath = "."
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

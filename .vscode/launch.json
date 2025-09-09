@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "debug python",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "debug main",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "main.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "debug benchmark",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "benchmark_all.py",
+      "console": "integratedTerminal"
+    }
+  ]
+}
