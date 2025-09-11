@@ -1,22 +1,36 @@
 [![REUSE status](https://api.reuse.software/badge/github.com/SAP/knn-sampler)](https://api.reuse.software/info/github.com/SAP/knn-sampler)
 
-# Missing values handling
+# Missing-value imputation
 
-This project is a Python application for missing-value imputation and reproducing the experiments from the [publication](https://).
+This project is a Python application for missing-value imputation and for reproducing the experiments from the publication [kNNSampler: Stochastic Imputations for Recovering Missing Value Distributions](https://arxiv.org/abs/2509.08366).
+It's a joint work by [SAP SE](https://www.sap.com/) and [Eurecom](https://www.eurecom.fr/) with funding support from the [ANRT](https://www.anrt.asso.fr/).
 
 ## knnSampler imputation algorithm
 
-`knnSampler` is a kNN-based method for missing-value imputation with support for multiple imputation and uncertainty quantification (see the [publication](https://)).
+**knnSampler** is a kNN-based method for missing-value imputation with support for multiple imputation and uncertainty quantification.
+It aims to preserve the underlying data distribution when imputing missing values (see the [publication](https://arxiv.org/abs/2509.08366) for more details).
 
 ## How to cite
 
-If you use knnSampler, please cite the original [publication](https://).
+If you use knnSampler, please cite the original [publication](https://arxiv.org/abs/2509.08366):
+
+```bibtex
+@misc{pashmchi2025knnsamplerstochasticimputationsrecovering,
+      title={kNNSampler: Stochastic Imputations for Recovering Missing Value Distributions}, 
+      author={Parastoo Pashmchi and Jerome Benoit and Motonobu Kanagawa},
+      year={2025},
+      eprint={2509.08366},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML},
+      url={https://arxiv.org/abs/2509.08366}, 
+}
+```
 
 ## Running the project
 
 ### Prerequisites
 
-This project requires Python 3.8+ and [poetry](https://python-poetry.org/).
+This project requires Python 3.8+ and [Poetry](https://python-poetry.org/).
 
 1. Clone the repository
 
@@ -38,19 +52,17 @@ poetry install --no-root
 
 ### Run algorithms
 
-The project uses a self-documented configuration file `assets/config.conf`.   
-The default configuration reproduces the results from the [publication](https://) section(s) ... .
+The project uses a self-documenting configuration file [`assets/config.conf`](./assets/config.conf).
 
 ```shell
 poetry run task main
 ```
 
-Runs the main imputation pipeline using `assets/config.conf`.
+Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
 ### Benchmark algorithms
 
-The benchmark reproduces results from the [publication](https://) section(s) ... .  
-Note: the benchmarking scripts have no dedicated configuration files. To change benchmark settings, edit the top of [benchmark_all.py](./benchmark_all.py) and [benchmark_knnsampler.py](./benchmark_knnsampler.py).
+Note: the benchmarking scripts do not have dedicated configuration files. To change benchmark settings, edit the top of [benchmark_all.py](./benchmark_all.py) and [benchmark_knnsampler.py](./benchmark_knnsampler.py).
 
 #### Benchmark all algorithms
 
@@ -62,7 +74,7 @@ poetry run task benchmark_all
 
 #### Benchmark knnSampler
 
-For detailed knnSampler results with different parameter intervals.
+For detailed knnSampler results with different parameter ranges.
 
 ```shell
 poetry run task benchmark_knnsampler
@@ -70,7 +82,7 @@ poetry run task benchmark_knnsampler
 
 ## Contributing
 
-This project is open to feature requests and bug reports via [GitHub issues](https://github.com/SAP/knn-sampler/issues). Contribution and feedback are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+This project is open to feature requests and bug reports via [GitHub issues](https://github.com/SAP/knn-sampler/issues). Contributions and feedback are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ### Code formatting
 
@@ -90,7 +102,7 @@ poetry run task lint
 poetry run task test
 ```
 
-### Install code quality git hooks
+### Install code-quality Git hooks
 
 ```shell
 poetry run pre-commit install
