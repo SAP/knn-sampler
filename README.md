@@ -7,12 +7,24 @@ It's a joint work by [SAP SE](https://www.sap.com/) and [Eurecom](https://www.eu
 
 ## knnSampler imputation algorithm
 
-**knnSampler** is a kNN-based method for missing-value imputation with support for multiple imputation and uncertainty quantification (see the [publication](https://arxiv.org/abs/2509.08366) for more details).
-It aims to preserve the underlying data distribution when imputing missing values.
+**knnSampler** is a kNN-based method for missing-value imputation with support for multiple imputation and uncertainty quantification.
+It aims to preserve the underlying data distribution when imputing missing values (see the [publication](https://arxiv.org/abs/2509.08366) for more details).
 
 ## How to cite
 
-If you use knnSampler, please cite the original [publication](https://).
+If you use knnSampler, please cite the original [publication](https://arxiv.org/abs/2509.08366):
+
+```bibtex
+@misc{pashmchi2025knnsamplerstochasticimputationsrecovering,
+      title={kNNSampler: Stochastic Imputations for Recovering Missing Value Distributions}, 
+      author={Parastoo Pashmchi and Jerome Benoit and Motonobu Kanagawa},
+      year={2025},
+      eprint={2509.08366},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML},
+      url={https://arxiv.org/abs/2509.08366}, 
+}
+```
 
 ## Running the project
 
