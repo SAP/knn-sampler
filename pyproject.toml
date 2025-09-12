@@ -30,16 +30,8 @@ dev = [
 ]
 
 # Poetry <2 support
-[tool.poetry]
-package-mode = false
-# name = "knnSampler"
-# version = "0.0.1"
-# description = "Missing-value imputation with multiple imputation and uncertainty quantification support"
-# authors = [
-#   "Jérôme Benoit <jerome.benoit@sap.com>",
-#   "Antoine Maistre <antoine.maistre@sap.com>",
-#   "Parastoo Pashmchi <parastoo.pashmchi@sap.com>",
-# ]
+# [tool.poetry]
+# package-mode = false
 
 [tool.taskipy.tasks]
 main = "poetry run python main.py"
