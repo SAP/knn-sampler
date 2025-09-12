@@ -1,14 +1,13 @@
 [project]
 name = "knnSampler"
 version = "0.0.1"
-description = ""
+description = "Missing-value imputation with multiple imputation and uncertainty quantification support"
 authors = [
   { name = "Jérôme Benoit", email = "jerome.benoit@sap.com" },
-  { name = "Antoine Maistre", email = "antoine.maistre@sap.com>"},
+  { name = "Antoine Maistre", email = "antoine.maistre@sap.com"},
   { name = "Parastoo Pashmchi", email = "parastoo.pashmchi@sap.com"}
 ]
 readme = "README.md"
-package-mode = false
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "matplotlib>=3",
@@ -21,12 +20,25 @@ dependencies = [
     "tqdm>=4",
   ]
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^4"
-taskipy = "^1"
-ruff = "^0.13"
-pytest = "^8"
-line-profiler = "^4"
+[project.optional-dependencies]
+dev = [
+  "pre-commit>=4,<5",
+  "taskipy>=1,<2",
+  "ruff>=0.13,<1.0",
+  "pytest>=8,<9",
+  "line-profiler>=4,<5",
+]
+
+# Poetry <2 support
+[tool.poetry]
+name = "knnSampler"
+version = "0.0.1"
+description = "Missing-value imputation with multiple imputation and uncertainty quantification support"
+authors = [
+  "Jérôme Benoit <jerome.benoit@sap.com>",
+  "Antoine Maistre <antoine.maistre@sap.com>",
+  "Parastoo Pashmchi <parastoo.pashmchi@sap.com>",
+]
 
 [tool.taskipy.tasks]
 main = "poetry run python main.py"
