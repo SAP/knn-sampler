@@ -30,7 +30,8 @@ dev = [
 ]
 
 # Poetry <2 support
-# [tool.poetry]
+[tool.poetry]
+package-mode = false
 # name = "knnSampler"
 # version = "0.0.1"
 # description = "Missing-value imputation with multiple imputation and uncertainty quantification support"
