@@ -25,7 +25,7 @@ pre-commit = "^4"
 taskipy = "^1"
 ruff = "^0.13"
 pytest = "^8"
-line-profiler = "^4"
+line-profiler = "^5"
 
 # Poetry <2 support
 # [tool.poetry.dependencies]
