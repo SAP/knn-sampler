@@ -19,10 +19,14 @@ from src.data_preparation.data_preparation import ExcelDataPreparator, Mar, Mcar
 from src.data_preparation.dataset_description import (
     Datasets,
 )
-from src.imputation import KnnImputer, KnnSampler, RandomForestImputer
+from src.imputation import (
+    KnnImputer,
+    KnnSampler,
+    KNNxKDEImputer,
+    LinearImputer,
+    RandomForestImputer,
+)
 from src.imputation.imputer import Imputer
-from src.imputation.knnxkdeimputer import KNNxKDEImputer
-from src.imputation.miceimputer import MICEImputer
 from src.imputation_context import ImputationContext
 from src.stats_utils import (
     calculate_p_value,
@@ -55,7 +59,8 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
     KnnImputer: {"n_neighbors": 5},
     RandomForestImputer: {},
     KNNxKDEImputer: {},
-    MICEImputer: {"n_neighbors": 5},
+    LinearImputer: {},
+    # MICEImputer: {"n_neighbors": 5},
 }
 
 ## KnnSampler config ##
@@ -110,7 +115,7 @@ def plot_results(
             x_values,
             mean_list,
             yerr=std_list,
-            fmt="o-",
+            fmt="o",
             capsize=5,
             elinewidth=2,
             markeredgewidth=2,
@@ -121,7 +126,12 @@ def plot_results(
     plt.xlabel("Sample Size")
     plt.ylabel("Mean Value")
     plt.title(f"Mean and Standard Deviation of {metric_name}")
-    plt.legend(loc="upper center", fontsize=12, bbox_to_anchor=(0.5, 1.12), ncol=3)
+    plt.legend(
+        loc="upper center",
+        fontsize=12,
+        bbox_to_anchor=(0.5, -0.1),
+        ncol=round(len(methods) / 2.0),
+    )
     plt.grid(True)
     plt.xticks(x_indices, [*map(str, sample_sizes)])
     plt.tight_layout()
