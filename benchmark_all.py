@@ -74,10 +74,10 @@ type Metric = tuple[dict[str, float], dict[str, float]]
 type Benchmark = tuple[Metric, Metric, Metric, list[dict[str, str]]]
 
 
-root_rmse_values: dict[str, list[np.floating | float]]
-root_ed_values: dict[str, list[np.floating | float]]
-root_p_values: dict[str, list[float]]
-root_et_values: dict[str, list[float]]
+# root_rmse_values: dict[str, list[np.floating | float]]
+# root_ed_values: dict[str, list[np.floating | float]]
+# root_p_values: dict[str, list[float]]
+# root_et_values: dict[str, list[float]]
 
 
 def plot_results(
@@ -110,7 +110,7 @@ def plot_results(
             x_values,
             mean_list,
             yerr=std_list,
-            fmt="o",
+            fmt="o-",
             capsize=5,
             elinewidth=2,
             markeredgewidth=2,
@@ -121,9 +121,10 @@ def plot_results(
     plt.xlabel("Sample Size")
     plt.ylabel("Mean Value")
     plt.title(f"Mean and Standard Deviation of {metric_name}")
-    plt.legend(loc="upper center", fontsize=16, bbox_to_anchor=(0.5, 1.15), ncol=6)
+    plt.legend(loc="upper center", fontsize=12, bbox_to_anchor=(0.5, 1.12), ncol=3)
     plt.grid(True)
     plt.xticks(x_indices, [*map(str, sample_sizes)])
+    plt.tight_layout()
     plt.show(block=block)
 
 
@@ -185,7 +186,7 @@ def evaluate_imputers(
 
 
 def benchmark_for_seed(seed: int | None = None) -> Benchmark:
-    if seed:
+    if seed is not None:
         np.random.seed(seed)
     results: dict[
         int, tuple[ImputersResults, ImputersResults, ImputersResults, ImputersResults]
@@ -300,9 +301,9 @@ def benchmark():
         print("\nEnergy Distance Standard Deviation Values:")
         pprint(ed_std_values)
 
-        print("\nP Distance Mean Values:")
+        print("\nP-value Mean Values:")
         pprint(p_mean_values)
-        print("\nP Distance Standard Deviation Values:")
+        print("\nP-value Standard Deviation Values:")
         pprint(p_std_values)
 
         print(f"\n\nExecution times for seed: {seed}\n")

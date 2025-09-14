@@ -31,8 +31,8 @@ class ImputationPlot:
         self.figures.append(fig)
         return fig, ax
 
-    def plot_original_scatterplot(self, figzise: tuple[int, int] = (10, 10)):
-        fig, ax = self._create_figure(figsize=figzise)
+    def plot_original_scatterplot(self, figsize: tuple[int, int] = (10, 10)):
+        _fig, ax = self._create_figure(figsize=figsize)
         sns.scatterplot(
             x=self.descriptor.input_column,
             y=self.descriptor.target_column,
@@ -46,7 +46,7 @@ class ImputationPlot:
 
     def plot_original(self, figsize: tuple[int, int] = (10, 10)):
         """Plot the original data: X vs Y (e.g., Irradiation vs Produced Energy)"""
-        fig, ax = self._create_figure(figsize=figsize)
+        _fig, ax = self._create_figure(figsize=figsize)
         ax.scatter(
             self.plot_context.context_data[self.descriptor.input_column],
             self.plot_context.context_data[self.descriptor.target_column],
@@ -65,7 +65,7 @@ class ImputationPlot:
         figsize: tuple[int, int] = (10, 10),
     ):
         """Plot the imputed data: X vs Y (e.g., Irradiation vs Produced Energy)"""
-        fig, ax = self._create_figure(figsize=figsize)
+        _fig, ax = self._create_figure(figsize=figsize)
         ax.scatter(
             self.plot_context.predicted_data[self.descriptor.target_column],
             self.plot_context.predicted_data[self.descriptor.input_column],
@@ -87,7 +87,7 @@ class ImputationPlot:
         upper_bounds: list[float],
         figsize: tuple[int, int] = (12, 12),
     ):
-        fig, ax = self._create_figure(figsize=figsize)
+        _fig, ax = self._create_figure(figsize=figsize)
 
         coverage_probability = np.mean(
             (
@@ -151,7 +151,7 @@ class ImputationPlot:
         ax.legend()
 
     def plot_original_imputed(self, figsize: tuple[int, int] = (10, 10)):
-        fig, ax = self._create_figure(figsize=figsize)
+        _fig, ax = self._create_figure(figsize=figsize)
 
         sns.scatterplot(
             x=self.descriptor.input_column,
@@ -204,7 +204,7 @@ class ImputationPlot:
         cmap = LinearSegmentedColormap.from_list(
             "custom", ["green", "orange", "red"], N=256
         )
-        fig, ax = self._create_figure(figsize=figsize)
+        _fig, ax = self._create_figure(figsize=figsize)
         scatter = ax.scatter(
             self.plot_context.predicted_data[self.descriptor.input_column],
             self.plot_context.predicted_data[self.descriptor.target_column],
@@ -219,7 +219,7 @@ class ImputationPlot:
         ax.legend()
 
     def plot_local_distance(self, n=100, figsize: tuple[int, int] = (10, 10)):
-        fig, ax = self._create_figure(figsize=figsize)
+        _fig, ax = self._create_figure(figsize=figsize)
 
         x = self.plot_context.predicted_data[self.descriptor.input_column]
         y_pred = self.plot_context.predicted_data[self.descriptor.target_column]
