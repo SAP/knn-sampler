@@ -53,7 +53,6 @@ cd <repository_directory>
 
 ```shell
 poetry env use 3.13
-poetry lock (optional)
 poetry install --no-root
 ```
 
