@@ -45,12 +45,6 @@ cd <repository_directory>
 ```
 
 3. Install dependencies
-
-    `optional` : Put virtualenv in the repo
-    ```shell
-    poetry config --local virtualenvs.in-project true 
-    ```
-
 ```shell
 poetry install --no-root
 ```
