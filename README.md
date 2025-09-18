@@ -30,7 +30,7 @@ If you use knnSampler, please cite the original [publication](https://arxiv.org/
 
 ### Prerequisites
 
-This project requires Python 3.8+ and [Poetry](https://python-poetry.org/).
+This project requires Python 3.13+ and [Poetry](https://python-poetry.org/).
 
 1. Clone the repository
 
