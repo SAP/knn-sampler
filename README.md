@@ -45,6 +45,7 @@ cd <repository_directory>
 ```
 
 3. Install dependencies
+
 ```shell
 poetry install --no-root
 ```
