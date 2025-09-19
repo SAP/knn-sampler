@@ -39,6 +39,8 @@ class MissingConfig:
     n_permutations: int
 
 
+# mar_config = MissingConfig(Mar(0.5, 1.5, 200), [2000], 5000)
+# mcar_config = MissingConfig(Mcar(1000), [3000], 5000)
 mar_config = MissingConfig(Mar(0.5, 1.5, 200), [2000, 3000, 4000, 5000, 6000], 5000)
 mcar_config = MissingConfig(Mcar(1000), [3000, 5000, 7000, 9000, 11000], 5000)
 
@@ -81,14 +83,13 @@ root_et_values: dict[str, list[float]]
 
 
 def plot_results(
-    mean_values: dict[str, float],
-    std_values: dict[str, float],
+    values: dict[str, list[float]],
     metric_name: str,
     sample_sizes: list[int],
     block: bool,
     seed: int | None = None,
 ) -> None:
-    methods = list(mean_values.keys())
+    methods = list(values.keys())
     colors: list[str] = [
         "green",
         "cyan",
@@ -98,18 +99,18 @@ def plot_results(
         "orange",
         "yellow",
     ]
-    offset = 0.4
     x_indices = np.arange(len(sample_sizes))
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))
 
+    offset = 0.1
     for i, method in enumerate(methods):
-        mean_list = [mean_values[method]] * len(sample_sizes)
-        std_list = [std_values[method]] * len(sample_sizes)
-        x_values = x_indices + (i - len(methods) / 2) * offset
+        x_values = x_indices + (i - len(methods) / 2 + 0.5) * offset
+        mean_values = values[method]
+        std_values = [np.std(values[method])] * len(sample_sizes)  # Calculate standard deviation
         plt.errorbar(
             x_values,
-            mean_list,
-            yerr=std_list,
+            mean_values,
+            yerr=std_values,
             fmt="o",
             capsize=5,
             elinewidth=2,
@@ -119,11 +120,12 @@ def plot_results(
         )
 
     plt.xlabel("Sample Size")
-    plt.ylabel("Mean Value")
-    plt.title(f"Mean and Standard Deviation of {metric_name}")
-    plt.legend(loc="upper center", fontsize=16, bbox_to_anchor=(0.5, 1.15), ncol=6)
+    plt.ylabel(f"{metric_name} Value")
+    plt.title(f"{metric_name} for Different Sample Sizes")
+    plt.legend(loc="upper center", fontsize=10, bbox_to_anchor=(0.5, 1.15), ncol=3)
     plt.grid(True)
     plt.xticks(x_indices, [*map(str, sample_sizes)])
+    plt.tight_layout()
     plt.show(block=block)
 
 
@@ -184,7 +186,7 @@ def evaluate_imputers(
     return rmse_values, energy_distances, p_values, execution_times
 
 
-def benchmark_for_seed(seed: int | None = None) -> Benchmark:
+def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]:
     if seed:
         np.random.seed(seed)
     results: dict[
@@ -226,30 +228,6 @@ def benchmark_for_seed(seed: int | None = None) -> Benchmark:
         for imp, result in ets.items():
             et_values[imp.get_name()].append(float(result))
 
-    rmse_mean_values = {
-        imputer: float(sum(values) / len(values))
-        for imputer, values in rmse_values.items()
-    }
-    rmse_std_values = {
-        imputer: float(np.std(np.array(values)))
-        for imputer, values in rmse_values.items()
-    }
-    ed_mean_values = {
-        imputer: float(sum(values) / len(values))
-        for imputer, values in ed_values.items()
-    }
-    ed_std_values = {
-        imputer: float(np.std(np.array(values)))
-        for imputer, values in ed_values.items()
-    }
-    p_mean_values = {
-        imputer: float(sum(values) / len(values))
-        for imputer, values in p_values.items()
-    }
-    p_std_values = {
-        imputer: float(np.std(np.array(values))) for imputer, values in p_values.items()
-    }
-
     et_table_data: list[dict[str, str]] = []
     for imputer_, execution_times in et_values.items():
         et_table_data.append(
@@ -264,15 +242,15 @@ def benchmark_for_seed(seed: int | None = None) -> Benchmark:
         )
 
     return (
-        (rmse_mean_values, rmse_std_values),
-        (ed_mean_values, ed_std_values),
-        (p_mean_values, p_std_values),
+        dict(rmse_values),
+        dict(ed_values),
+        dict(p_values),
         et_table_data,
     )
 
 
 def benchmark():
-    results_per_iteration: dict[tuple[int, int], Benchmark] = {}
+    results_per_iteration: dict[tuple[int, int], tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]] = {}
     base_seed = np.random.randint(1, 1 * 10**8)
     for iteration in (bar := trange(iterations)):
         seed = base_seed + iteration
@@ -280,30 +258,19 @@ def benchmark():
         results_per_iteration[iteration, seed] = benchmark_for_seed(seed)
     for index, (
         (iteration, seed),
-        (
-            (rmse_mean_values, rmse_std_values),
-            (ed_mean_values, ed_std_values),
-            (p_mean_values, p_std_values),
-            et_table_data,
-        ),
+        (rmse_values, ed_values, p_values, et_table_data),
     ) in enumerate(results_per_iteration.items()):
         print(f"\n{'=' * 40}\n")
         print(f"RESULTS:\nIteration: {iteration}, Seed: {seed}\n")
 
-        print("RMSE Mean Values:")
-        pprint(rmse_mean_values)
-        print("\nRMSE Standard Deviation Values:")
-        pprint(rmse_std_values)
+        print("RMSE Values:")
+        pprint(rmse_values)
 
-        print("\nEnergy Distance Mean Values:")
-        pprint(ed_mean_values)
-        print("\nEnergy Distance Standard Deviation Values:")
-        pprint(ed_std_values)
+        print("\nEnergy Distance Values:")
+        pprint(ed_values)
 
-        print("\nP Distance Mean Values:")
-        pprint(p_mean_values)
-        print("\nP Distance Standard Deviation Values:")
-        pprint(p_std_values)
+        print("\nP-values:")
+        pprint(p_values)
 
         print(f"\n\nExecution times for seed: {seed}\n")
         print(
@@ -311,27 +278,10 @@ def benchmark():
         )
 
         plot_results(
-            rmse_mean_values,
-            rmse_std_values,
+            rmse_values,
             "RMSE",
             config.sample_sizes,
-            block=False,
-            seed=seed,
-        )
-        plot_results(
-            ed_mean_values,
-            ed_std_values,
-            "Energy Distance",
-            config.sample_sizes,
-            block=False,
-            seed=seed,
-        )
-        plot_results(
-            p_mean_values,
-            p_std_values,
-            "P-value",
-            config.sample_sizes,
-            block=index == iterations - 1,
+            block=True,
             seed=seed,
         )
 
