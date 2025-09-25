@@ -12,10 +12,10 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import mean_squared_error
 from tabulate import tabulate  # type: ignore
 from tqdm import tqdm, trange
-
+import time
 from assets.profiling.line_profile import Profiler
 from src.data_preparation.data_description import DataFrameMLData
-from src.data_preparation.data_preparation import ExcelDataPreparator, Mar, Mcar
+from src.data_preparation.data_preparation import ExcelDataPreparator, DataGenerator, Mar, Mcar, Rate
 from src.data_preparation.dataset_description import (
     Datasets,
 )
@@ -39,13 +39,12 @@ class MissingConfig:
     n_permutations: int
 
 
-# mar_config = MissingConfig(Mar(0.5, 1.5, 200), [2000], 5000)
-# mcar_config = MissingConfig(Mcar(1000), [3000], 5000)
-mar_config = MissingConfig(Mar(0.5, 1.5, 200), [2000, 3000, 4000, 5000, 6000], 5000)
-mcar_config = MissingConfig(Mcar(1000), [3000, 5000, 7000, 9000, 11000], 5000)
+# Configuration to match exactly the reference code: 30% for each size
+mar_config = MissingConfig(Mar(0.5, 1.5, Rate(0.3)), [3000, 5000], 200)
+mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000, 5000], 200)  # 30% of each sample size
 
 ###### configuration selection ######
-config: MissingConfig = mar_config
+config: MissingConfig = mcar_config  # Use MCAR as in the reference code
 #####################################
 
 imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
@@ -54,14 +53,14 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
         "lower_percentiles": [90, 80],
         "compute_bounds": True,
     },
-    KnnImputer: {"n_neighbors": 5},
+    KnnImputer: {"n_neighbors": 1},  # Match the reference code
     RandomForestImputer: {},
-    KNNxKDEImputer: {},
+    KNNxKDEImputer: {"h": 0.03, "tau": 0.05},  # Parameters from reference code
     MICEImputer: {"n_neighbors": 5},
 }
 
 ## KnnSampler config ##
-iterations = 1
+iterations = 2
 #######################
 
 # type definitions
@@ -90,15 +89,16 @@ def plot_results(
     seed: int | None = None,
 ) -> None:
     methods = list(values.keys())
-    colors: list[str] = [
-        "green",
-        "cyan",
-        "purple",
-        "blue",
-        "pink",
-        "orange",
-        "yellow",
-    ]
+
+    # Colors according to reference image
+    color_map = {
+        "KnnSampler": "#1f77b4",      # Blue
+        "RandomForestImputer": "#2ca02c",  # Green
+        "KnnImputer": "#9467bd",      # Purple
+        "KNNxKDEImputer": "#ffb6c1",  # Light pink
+        "MICEImputer": "#d4af37",     # Beige/gold (Linear in the image)
+    }
+
     x_indices = np.arange(len(sample_sizes))
     plt.figure(figsize=(12, 6))
 
@@ -107,6 +107,10 @@ def plot_results(
         x_values = x_indices + (i - len(methods) / 2 + 0.5) * offset
         mean_values = values[method]
         std_values = [np.std(values[method])] * len(sample_sizes)  # Calculate standard deviation
+
+        # Use the corresponding color or a default color
+        color = color_map.get(method, "black")
+
         plt.errorbar(
             x_values,
             mean_values,
@@ -116,24 +120,79 @@ def plot_results(
             elinewidth=2,
             markeredgewidth=2,
             label=f"{method} {f'for seed {seed}' if seed is not None else ''}",
-            color=colors[i] if i < len(colors) else "black",
+            color=color,
         )
 
     plt.xlabel("Sample Size")
     plt.ylabel(f"{metric_name} Value")
     plt.title(f"{metric_name} for Different Sample Sizes")
-    plt.legend(loc="upper center", fontsize=10, bbox_to_anchor=(0.5, 1.15), ncol=3)
+    # Legend on the right as in the reference image
+    plt.legend(loc="center left", fontsize=10, bbox_to_anchor=(1, 0.5))
     plt.grid(True)
     plt.xticks(x_indices, [*map(str, sample_sizes)])
     plt.tight_layout()
     plt.show(block=block)
 
 
+def plot_results_with_error_bars(
+    means: dict[str, float],
+    stds: dict[str, float],
+    metric_name: str,
+    sample_sizes: list[int],
+) -> None:
+    methods = list(means.keys())
+
+    # Colors according to reference image
+    color_map = {
+        "KnnSampler": "#1f77b4",      # Blue
+        "RandomForestImputer": "#2ca02c",  # Green
+        "KnnImputer": "#9467bd",      # Purple
+        "KNNxKDEImputer": "#ffb6c1",  # Light pink
+        "MICEImputer": "#d4af37",     # Beige/gold (Linear in the image)
+    }
+
+    x_indices = np.arange(len(sample_sizes))
+    plt.figure(figsize=(12, 6))
+
+    offset = 0.1
+    for i, method in enumerate(methods):
+        x_values = x_indices + (i - len(methods) / 2 + 0.5) * offset
+        mean_value = [means[method]] * len(sample_sizes)
+        std_value = [stds[method]] * len(sample_sizes)
+
+        # Use the corresponding color or a default color
+        color = color_map.get(method, "black")
+
+        plt.errorbar(
+            x_values,
+            mean_value,
+            yerr=std_value,
+            fmt="o",
+            capsize=5,
+            elinewidth=2,
+            markeredgewidth=2,
+            label=method,
+            color=color,
+        )
+
+    plt.xlabel("Sample Size")
+    plt.ylabel(f"{metric_name} Value")
+    plt.title(f"{metric_name} - Aggregated ({iterations} iterations)")
+    # Legend on the right as in the reference image
+    plt.legend(loc="center left", fontsize=10, bbox_to_anchor=(1, 0.5))
+    plt.grid(True)
+    plt.xticks(x_indices, [*map(str, sample_sizes)])
+    plt.tight_layout()
+    plt.show(block=True)
+
+
 def create_data_preparator(sample_size):
-    return ExcelDataPreparator(
-        Datasets.PUBLICATION_DATASET,
-        config.missing_generator,
-        sample_size,
+    # Use a synthetic ring data generator as in the reference code
+    return DataGenerator(
+        linear_interpolation_ratio=1.0,  # parameter 'a' from reference code
+        sample_size=sample_size,
+        missing_generator=config.missing_generator,
+        geometry_type="ring"  # Generate 2D ring data
     )
 
 
@@ -249,17 +308,102 @@ def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]],
     )
 
 
+def estimate_total_time():
+    """Estimate total execution time based on parameters"""
+
+    # Base time per imputer (in seconds) for 1000 samples with 30% missing
+    base_times = {
+        "KnnSampler": 2.0,        # O(n²) for k-NN
+        "KnnImputer": 0.5,        # Simpler
+        "RandomForestImputer": 1.5, # O(n*log(n))
+        "KNNxKDEImputer": 3.0,    # More complex with KDE
+        "MICEImputer": 4.0,       # Iterative, slower
+    }
+
+    total_estimated_time = 0
+
+    print("TOTAL TIME ESTIMATION:")
+    print("=" * 50)
+
+    for sample_size in config.sample_sizes:
+        missing_count = int(sample_size * 0.3)  # 30% missing
+
+        # Scale factor based on algorithmic complexity
+        scale_factor = (sample_size / 1000)
+
+        sample_time = 0
+        for imputer_name, base_time in base_times.items():
+            # Different algorithmic complexities
+            if "Knn" in imputer_name:
+                # O(n²) for k-NN
+                imputer_time = base_time * (scale_factor ** 1.5)
+            elif "RandomForest" in imputer_name:
+                # O(n*log(n)) for Random Forest
+                imputer_time = base_time * scale_factor * math.log(scale_factor + 1)
+            else:
+                # O(n) linear for others
+                imputer_time = base_time * scale_factor
+
+            sample_time += imputer_time
+
+        iteration_time = sample_time * iterations
+        total_estimated_time += iteration_time
+
+        print(f"  Sample size {sample_size:,} ({missing_count:,} missing values):")
+        print(f"     • Per iteration: ~{sample_time:.1f}s")
+        print(f"     • {iterations} iterations: ~{iteration_time:.1f}s")
+
+    # Add overhead time (permutation tests, plots, etc.)
+    overhead_time = total_estimated_time * 0.2  # 20% overhead
+    total_estimated_time += overhead_time
+
+    minutes = total_estimated_time / 60
+    hours = minutes / 60
+
+    print(f"\nTOTAL ESTIMATED TIME:")
+    if hours >= 1:
+        print(f"   {total_estimated_time:.0f}s (~{hours:.1f}h)")
+    elif minutes >= 1:
+        print(f"   {total_estimated_time:.0f}s (~{minutes:.1f}min)")
+    else:
+        print(f"   {total_estimated_time:.0f}s")
+
+    print(f"   ({len(config.sample_sizes)} sizes × {iterations} iterations × {len(base_times)} imputers)")
+    print("=" * 50)
+
+    return total_estimated_time
+
+
 def benchmark():
+    # Estimate and display total time
+    estimated_time = estimate_total_time()
+
+    # Measure actual execution time
+    start_time = time.perf_counter()
+
+    # Collect all results from all iterations
+    all_rmse_values = defaultdict(list)
+    all_ed_values = defaultdict(list)
+    all_p_values = defaultdict(list)
+
     results_per_iteration: dict[tuple[int, int], tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]] = {}
     base_seed = np.random.randint(1, 1 * 10**8)
+
     for iteration in (bar := trange(iterations)):
         seed = base_seed + iteration
         bar.set_description(f"iteration : {iteration}, seed : {seed}")
-        results_per_iteration[iteration, seed] = benchmark_for_seed(seed)
-    for index, (
-        (iteration, seed),
-        (rmse_values, ed_values, p_values, et_table_data),
-    ) in enumerate(results_per_iteration.items()):
+        rmse_values, ed_values, p_values, et_table_data = benchmark_for_seed(seed)
+        results_per_iteration[iteration, seed] = (rmse_values, ed_values, p_values, et_table_data)
+
+        # Collect results for calculating means and standard deviations
+        for method, values in rmse_values.items():
+            all_rmse_values[method].extend(values)
+        for method, values in ed_values.items():
+            all_ed_values[method].extend(values)
+        for method, values in p_values.items():
+            all_p_values[method].extend(values)
+
+        # Display results for this iteration
         print(f"\n{'=' * 40}\n")
         print(f"RESULTS:\nIteration: {iteration}, Seed: {seed}\n")
 
@@ -277,13 +421,84 @@ def benchmark():
             tabulate(et_table_data, headers="keys", tablefmt="grid", numalign="center")
         )
 
-        plot_results(
-            rmse_values,
-            "RMSE",
-            config.sample_sizes,
-            block=True,
-            seed=seed,
-        )
+        # Create individual plots for this iteration as before
+        # Display RMSE and Energy Distance non-blocking at each iteration
+        plot_results(rmse_values, "RMSE", config.sample_sizes, block=False, seed=seed)
+        plot_results(ed_values, "Energy Distance", config.sample_sizes, block=False, seed=seed)
+        # Do NOT display the P-Value plot for the last iteration (it will be displayed blocking after all prints)
+        if iteration < iterations - 1:
+            plot_results(p_values, "P-Value", config.sample_sizes, block=False, seed=seed)
+
+    # Calculate means and standard deviations for final aggregated graphs
+    rmse_means = {method: np.mean(values) for method, values in all_rmse_values.items()}
+    rmse_stds = {method: np.std(values) for method, values in all_rmse_values.items()}
+    ed_means = {method: np.mean(values) for method, values in all_ed_values.items()}
+    ed_stds = {method: np.std(values) for method, values in all_ed_values.items()}
+    p_means = {method: np.mean(values) for method, values in all_p_values.items()}
+    p_stds = {method: np.std(values) for method, values in all_p_values.items()}
+
+
+    # Calculate and display the difference between estimated and actual time
+    end_time = time.perf_counter()
+    actual_time = end_time - start_time
+
+    print(f"\n{'=' * 60}")
+    print("ESTIMATED vs ACTUAL TIME COMPARISON:")
+    print("=" * 60)
+
+    actual_minutes = actual_time / 60
+    actual_hours = actual_minutes / 60
+    estimated_minutes = estimated_time / 60
+    estimated_hours = estimated_minutes / 60
+
+    # Display actual time
+    if actual_hours >= 1:
+        actual_str = f"{actual_time:.0f}s (~{actual_hours:.1f}h)"
+    elif actual_minutes >= 1:
+        actual_str = f"{actual_time:.0f}s (~{actual_minutes:.1f}min)"
+    else:
+        actual_str = f"{actual_time:.0f}s"
+
+    # Display estimated time
+    if estimated_hours >= 1:
+        estimated_str = f"{estimated_time:.0f}s (~{estimated_hours:.1f}h)"
+    elif estimated_minutes >= 1:
+        estimated_str = f"{estimated_time:.0f}s (~{estimated_minutes:.1f}min)"
+    else:
+        estimated_str = f"{estimated_time:.0f}s"
+
+    print(f"Estimated time:  {estimated_str}")
+    print(f"Actual time:     {actual_str}")
+
+    # Calculate the difference
+    time_diff = actual_time - estimated_time
+    diff_percentage = (time_diff / estimated_time) * 100
+
+    if abs(time_diff) < 30:  # Less than 30s difference
+        accuracy_msg = "Very precise estimation!"
+    elif abs(diff_percentage) < 20:  # Less than 20% difference
+        accuracy_msg = "Good estimation"
+    elif abs(diff_percentage) < 50:  # Less than 50% difference
+        accuracy_msg = "Approximate estimation"
+    else:
+        accuracy_msg = "Estimation needs improvement"
+
+    if time_diff > 0:
+        print(f"Difference:      +{time_diff:.0f}s ({diff_percentage:+.1f}%) - Slower than expected")
+    else:
+        print(f"Difference:      {time_diff:.0f}s ({diff_percentage:+.1f}%) - Faster than expected")
+
+    print(f"{accuracy_msg}")
+    print("=" * 60)
+
+    # Display the last blocking plot after all prints
+    if iterations > 0:
+        # Get results from the last iteration
+        last_iteration_key = (iterations - 1, base_seed + iterations - 1)
+        if last_iteration_key in results_per_iteration:
+            last_rmse, last_ed, last_p, _ = results_per_iteration[last_iteration_key]
+            # Only the last P-Value plot is blocking
+            plot_results(last_p, "P-Value", config.sample_sizes, block=True, seed=base_seed + iterations - 1)
 
 
 def main():
