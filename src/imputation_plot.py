@@ -31,8 +31,8 @@ class ImputationPlot:
         self.figures.append(fig)
         return fig, ax
 
-    def plot_original_scatterplot(self, figzise: tuple[int, int] = (10, 10)):
-        _fig, ax = self._create_figure(figsize=figzise)
+    def plot_original_scatterplot(self, figsize: tuple[int, int] = (10, 10)):
+        _fig, ax = self._create_figure(figsize=figsize)
         sns.scatterplot(
             x=self.descriptor.input_column,
             y=self.descriptor.target_column,
