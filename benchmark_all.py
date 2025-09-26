@@ -1,4 +1,5 @@
 import math
+import time
 import typing
 from collections import defaultdict
 from dataclasses import dataclass
@@ -10,14 +11,15 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.metrics import mean_squared_error
-from tabulate import tabulate  # type: ignore
 from tqdm import tqdm, trange
-import time
+
 from assets.profiling.line_profile import Profiler
 from src.data_preparation.data_description import DataFrameMLData
-from src.data_preparation.data_preparation import ExcelDataPreparator, DataGenerator, Mar, Mcar, Rate
-from src.data_preparation.dataset_description import (
-    Datasets,
+from src.data_preparation.data_preparation import (
+    DataGenerator,
+    Mar,
+    Mcar,
+    Rate,
 )
 from src.imputation import (
     KnnImputer,
@@ -100,9 +102,21 @@ def plot_results(
     methods = list(values.keys())
 
     # Colors according to reference image - Order: kNNSampler → Random Forest → kNNImputer → KNNxKDE → MICE
-    methods_order = ["KnnSampler", "RandomForestImputer", "KnnImputer", "KNNxKDEImputer", "MICEImputer"]
-    colors = ["#1f77b4", "#2ca02c", "#9467bd", "#ffb6c1", "#d4af37"]  # Blue, Green, Purple, Light pink, Beige/gold
-    color_map = dict(zip(methods_order, colors))
+    methods_order = [
+        "KnnSampler",
+        "RandomForestImputer",
+        "KnnImputer",
+        "KNNxKDEImputer",
+        "MICEImputer",
+    ]
+    colors = [
+        "#1f77b4",
+        "#2ca02c",
+        "#9467bd",
+        "#ffb6c1",
+        "#d4af37",
+    ]  # Blue, Green, Purple, Light pink, Beige/gold
+    color_map = dict(zip(methods_order, colors, strict=False))
 
     x_indices = np.arange(len(sample_sizes))
     plt.figure(figsize=(12, 6))
@@ -111,7 +125,9 @@ def plot_results(
     for i, method in enumerate(methods):
         x_values = x_indices + (i - len(methods) / 2 + 0.5) * offset
         mean_values = values[method]
-        std_values = [np.std(values[method])] * len(sample_sizes)  # Calculate standard deviation
+        std_values = [np.std(values[method])] * len(
+            sample_sizes
+        )  # Calculate standard deviation
 
         # Use the corresponding color or a default color
         color = color_map.get(method, "black")
@@ -148,9 +164,21 @@ def plot_results_with_error_bars(
     methods = list(means.keys())
 
     # Colors according to reference image - Order: kNNSampler → Random Forest → kNNImputer → KNNxKDE → MICE
-    methods_order = ["KnnSampler", "RandomForestImputer", "KnnImputer", "KNNxKDEImputer", "MICEImputer"]
-    colors = ["#1f77b4", "#2ca02c", "#9467bd", "#ffb6c1", "#d4af37"]  # Blue, Green, Purple, Light pink, Beige/gold
-    color_map = dict(zip(methods_order, colors))
+    methods_order = [
+        "KnnSampler",
+        "RandomForestImputer",
+        "KnnImputer",
+        "KNNxKDEImputer",
+        "MICEImputer",
+    ]
+    colors = [
+        "#1f77b4",
+        "#2ca02c",
+        "#9467bd",
+        "#ffb6c1",
+        "#d4af37",
+    ]  # Blue, Green, Purple, Light pink, Beige/gold
+    color_map = dict(zip(methods_order, colors, strict=False))
 
     x_indices = np.arange(len(sample_sizes))
     plt.figure(figsize=(12, 6))
@@ -197,9 +225,15 @@ def plot_aggregated_results_per_size(
     methods = list(means_map.keys())
 
     # Colors according to reference image - fixed order
-    methods_order = ["KnnSampler", "RandomForestImputer", "KnnImputer", "KNNxKDEImputer", "MICEImputer"]
+    methods_order = [
+        "KnnSampler",
+        "RandomForestImputer",
+        "KnnImputer",
+        "KNNxKDEImputer",
+        "MICEImputer",
+    ]
     colors = ["#1f77b4", "#2ca02c", "#9467bd", "#ffb6c1", "#d4af37"]
-    color_map = dict(zip(methods_order, colors))
+    color_map = dict(zip(methods_order, colors, strict=False))
 
     x_indices = np.arange(len(sample_sizes))
     plt.figure(figsize=(12, 6))
@@ -225,7 +259,9 @@ def plot_aggregated_results_per_size(
 
     plt.xlabel("Sample Size")
     plt.ylabel("Mean Value")
-    plt.title(f"Aggregated Mean and Standard Deviation of {metric_name} over {iterations} iterations")
+    plt.title(
+        f"Aggregated Mean and Standard Deviation of {metric_name} over {iterations} iterations"
+    )
     plt.legend(
         loc="upper center",
         fontsize=12,
@@ -280,17 +316,24 @@ def evaluate_imputers(
         rmse_value = math.sqrt(
             mean_squared_error(
                 context.actual_data[context.dataset_descriptor.target_column],
-                context.predicted_data[context.dataset_descriptor.target_column]
+                context.predicted_data[context.dataset_descriptor.target_column],
             )
         )
         energy_distance = multivariate_energy_distance_imputed(
-            context.predicted_data[context.dataset_descriptor.target_column].to_numpy().reshape(-1, 1),
-            context.actual_data[context.dataset_descriptor.target_column].to_numpy().reshape(-1, 1)
-        )
-        Z = pd.concat([
-            context.predicted_data[context.dataset_descriptor.target_column],
+            context.predicted_data[context.dataset_descriptor.target_column]
+            .to_numpy()
+            .reshape(-1, 1),
             context.actual_data[context.dataset_descriptor.target_column]
-        ], ignore_index=True).to_frame()
+            .to_numpy()
+            .reshape(-1, 1),
+        )
+        Z = pd.concat(
+            [
+                context.predicted_data[context.dataset_descriptor.target_column],
+                context.actual_data[context.dataset_descriptor.target_column],
+            ],
+            ignore_index=True,
+        ).to_frame()
         p_value = calculate_p_value(
             permutation_test(Z, config.n_permutations), energy_distance
         )
@@ -305,7 +348,14 @@ def evaluate_imputers(
     return rmse_values, energy_distances, p_values, execution_times
 
 
-def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]:
+def benchmark_for_seed(
+    seed: int | None = None,
+) -> tuple[
+    dict[str, list[float]],
+    dict[str, list[float]],
+    dict[str, list[float]],
+    list[dict[str, str]],
+]:
     if seed is not None:
         np.random.seed(seed)
 
@@ -314,14 +364,19 @@ def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]],
     p_values = defaultdict(list)
     et_table_data: list[dict[str, str]] = []
 
-
     # TODO: make this cleaner
     if REGENERATE_DATA_PER_METHOD:
         # For each sample size and each imputer, regenerate the dataset and evaluate only that method
         for _, sample_size in (
-            bar := tqdm(enumerate(config.sample_sizes), total=len(config.sample_sizes), leave=False)
+            bar := tqdm(
+                enumerate(config.sample_sizes),
+                total=len(config.sample_sizes),
+                leave=False,
+            )
         ):
-            bar.set_description(f"executing for {sample_size = } (per-method regeneration)")
+            bar.set_description(
+                f"executing for {sample_size = } (per-method regeneration)"
+            )
             for imputer_cls, params in imputer_classes.items():
                 # Fresh dataset for this method
                 data_preparator = create_data_preparator(sample_size)
@@ -331,7 +386,9 @@ def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]],
                 # Instantiate only the current imputer
                 imputers = [*instantiate_imputers({imputer_cls: params}, prepared_data)]
 
-                rmse_vals, eds, ps, ets = evaluate_imputers(imputers, prepared_data, actual_values)
+                rmse_vals, eds, ps, ets = evaluate_imputers(
+                    imputers, prepared_data, actual_values
+                )
 
                 # There is only one imputer in these dicts
                 imputer_obj = next(iter(rmse_vals.keys()))
@@ -343,15 +400,23 @@ def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]],
 
                 et = ets[imputer_obj]
                 et_table_data.append(
-                    {"Imputer": name, f"sample size of {sample_size}": f"{float(et):.2f}"}
+                    {
+                        "Imputer": name,
+                        f"sample size of {sample_size}": f"{float(et):.2f}",
+                    }
                 )
     else:
         # Original benchmark behavior: one dataset per sample size, evaluate all imputers together
         results: dict[
-            int, tuple[ImputersResults, ImputersResults, ImputersResults, ImputersResults]
+            int,
+            tuple[ImputersResults, ImputersResults, ImputersResults, ImputersResults],
         ] = {}
         for _, sample_size in (
-            bar := tqdm(enumerate(config.sample_sizes), total=len(config.sample_sizes), leave=False)
+            bar := tqdm(
+                enumerate(config.sample_sizes),
+                total=len(config.sample_sizes),
+                leave=False,
+            )
         ):
             bar.set_description(f"executing for {sample_size = }")
             data_preparator = create_data_preparator(sample_size)
@@ -365,7 +430,9 @@ def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]],
                 )
             ]
 
-            results[sample_size] = evaluate_imputers(imputers, prepared_data, actual_values)
+            results[sample_size] = evaluate_imputers(
+                imputers, prepared_data, actual_values
+            )
 
         et_values = defaultdict(list)
         for _, (rmse_vals, eds, ps, ets) in results.items():
@@ -406,11 +473,11 @@ def estimate_total_time():
 
     # Base time per imputer (in seconds) for 1000 samples with 30% missing
     base_times = {
-        "KnnSampler": 2.0,        # O(n²) for k-NN
-        "KnnImputer": 0.5,        # Simpler
-        "RandomForestImputer": 1.5, # O(n*log(n))
-        "KNNxKDEImputer": 3.0,    # More complex with KDE
-        "MICEImputer": 4.0,       # Iterative, slower
+        "KnnSampler": 2.0,  # O(n²) for k-NN
+        "KnnImputer": 0.5,  # Simpler
+        "RandomForestImputer": 1.5,  # O(n*log(n))
+        "KNNxKDEImputer": 3.0,  # More complex with KDE
+        "MICEImputer": 4.0,  # Iterative, slower
     }
 
     total_estimated_time = 0
@@ -419,14 +486,14 @@ def estimate_total_time():
         missing_count = int(sample_size * 0.3)  # 30% missing
 
         # Scale factor based on algorithmic complexity
-        scale_factor = (sample_size / 1000)
+        scale_factor = sample_size / 1000
 
         sample_time = 0
         for imputer_name, base_time in base_times.items():
             # Different algorithmic complexities
             if "Knn" in imputer_name:
                 # O(n²) for k-NN
-                imputer_time = base_time * (scale_factor ** 1.5)
+                imputer_time = base_time * (scale_factor**1.5)
             elif "RandomForest" in imputer_name:
                 # O(n*log(n)) for Random Forest
                 imputer_time = base_time * scale_factor * math.log(scale_factor + 1)
@@ -458,14 +525,27 @@ def benchmark():
     agg_ed: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
     agg_p: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
 
-    results_per_iteration: dict[tuple[int, int], tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]] = {}
+    results_per_iteration: dict[
+        tuple[int, int],
+        tuple[
+            dict[str, list[float]],
+            dict[str, list[float]],
+            dict[str, list[float]],
+            list[dict[str, str]],
+        ],
+    ] = {}
     base_seed = np.random.randint(1, 1 * 10**8)
 
     for iteration in (bar := trange(iterations)):
         seed = base_seed + iteration
         bar.set_description(f"iteration : {iteration}, seed : {seed}")
         rmse_values, ed_values, p_values, et_table_data = benchmark_for_seed(seed)
-        results_per_iteration[iteration, seed] = (rmse_values, ed_values, p_values, et_table_data)
+        results_per_iteration[iteration, seed] = (
+            rmse_values,
+            ed_values,
+            p_values,
+            et_table_data,
+        )
 
         # Aggregate results per method and per sample size across iterations
         for method, values in rmse_values.items():
@@ -494,17 +574,22 @@ def benchmark():
         print("\nP-values:")
         pprint(p_values)
 
-
         # Create individual plots for this iteration as before
         # Display RMSE and Energy Distance non-blocking at each iteration
         plot_results(rmse_values, "RMSE", config.sample_sizes, block=False, seed=seed)
-        plot_results(ed_values, "Energy Distance", config.sample_sizes, block=False, seed=seed)
+        plot_results(
+            ed_values, "Energy Distance", config.sample_sizes, block=False, seed=seed
+        )
         # Do NOT display the P-Value plot for the last iteration (it will be displayed blocking after all prints)
         if iteration < iterations - 1:
-            plot_results(p_values, "P-Value", config.sample_sizes, block=False, seed=seed)
+            plot_results(
+                p_values, "P-Value", config.sample_sizes, block=False, seed=seed
+            )
 
     # Build per-method arrays of means/stds aligned with sample_sizes
-    def build_mean_std_maps(agg: dict[str, dict[int, list[float]]]) -> tuple[dict[str, list[float]], dict[str, list[float]]]:
+    def build_mean_std_maps(
+        agg: dict[str, dict[int, list[float]]],
+    ) -> tuple[dict[str, list[float]], dict[str, list[float]]]:
         means_map: dict[str, list[float]] = {}
         stds_map: dict[str, list[float]] = {}
         for method, per_size in agg.items():
@@ -523,10 +608,15 @@ def benchmark():
     p_means_map, p_stds_map = build_mean_std_maps(agg_p)
 
     # Final aggregated plots with proper error bars across iterations
-    plot_aggregated_results_per_size(rmse_means_map, rmse_stds_map, "RMSE", config.sample_sizes, block=False)
-    plot_aggregated_results_per_size(ed_means_map, ed_stds_map, "Energy Distance", config.sample_sizes, block=False)
-    plot_aggregated_results_per_size(p_means_map, p_stds_map, "P-Value", config.sample_sizes, block=False)
-
+    plot_aggregated_results_per_size(
+        rmse_means_map, rmse_stds_map, "RMSE", config.sample_sizes, block=False
+    )
+    plot_aggregated_results_per_size(
+        ed_means_map, ed_stds_map, "Energy Distance", config.sample_sizes, block=False
+    )
+    plot_aggregated_results_per_size(
+        p_means_map, p_stds_map, "P-Value", config.sample_sizes, block=False
+    )
 
     # Calculate and display only the total execution time
     end_time = time.perf_counter()
@@ -556,7 +646,13 @@ def benchmark():
         if last_iteration_key in results_per_iteration:
             last_rmse, last_ed, last_p, _ = results_per_iteration[last_iteration_key]
             # Only the last P-Value plot is blocking
-            plot_results(last_p, "P-Value", config.sample_sizes, block=True, seed=base_seed + iterations - 1)
+            plot_results(
+                last_p,
+                "P-Value",
+                config.sample_sizes,
+                block=True,
+                seed=base_seed + iterations - 1,
+            )
 
 
 def main():

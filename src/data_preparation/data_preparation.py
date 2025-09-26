@@ -67,11 +67,7 @@ class Mcar(MissingDataGenerator):
             if isinstance(self.missing_values, Rate)
             else self.missing_values
         )
-        missing_indexes = np.random.choice(
-            df.index,
-            size=size,
-            replace=False
-        )
+        missing_indexes = np.random.choice(df.index, size=size, replace=False)
         actual_values = df.loc[missing_indexes, "Y"].copy()
         df.loc[missing_indexes, "Y"] = np.nan
         return missing_indexes, actual_values
