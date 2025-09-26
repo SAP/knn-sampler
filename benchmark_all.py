@@ -41,7 +41,7 @@ class MissingConfig:
 
 # 30% for each size
 mar_config = MissingConfig(Mar(0.5, 1.5, Rate(0.3)), [3000], 200)
-mcar_config = MissingConfig(Mcar(Rate(0.3)), [2000], 200)
+mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000], 200)
 
 ###### configuration selection ######
 config: MissingConfig = mcar_config
@@ -60,7 +60,7 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
 }
 
 ## KnnSampler config ##
-iterations = 2  # Aligned with Imputation-full-code (1).py range(2)
+iterations = 5  # Aligned with Imputation-full-code (1).py range(2)
 #######################
 
 # Data regeneration policy
@@ -406,9 +406,6 @@ def estimate_total_time():
 
     total_estimated_time = 0
 
-    print("TOTAL TIME ESTIMATION:")
-    print("=" * 50)
-
     for sample_size in config.sample_sizes:
         missing_count = int(sample_size * 0.3)  # 30% missing
 
@@ -433,33 +430,15 @@ def estimate_total_time():
         iteration_time = sample_time * iterations
         total_estimated_time += iteration_time
 
-        print(f"  Sample size {sample_size:,} ({missing_count:,} missing values):")
-        print(f"     • Per iteration: ~{sample_time:.1f}s")
-        print(f"     • {iterations} iterations: ~{iteration_time:.1f}s")
-
     # Add overhead time (permutation tests, plots, etc.)
     overhead_time = total_estimated_time * 0.2  # 20% overhead
     total_estimated_time += overhead_time
-
-    minutes = total_estimated_time / 60
-    hours = minutes / 60
-
-    print(f"\nTOTAL ESTIMATED TIME:")
-    if hours >= 1:
-        print(f"   {total_estimated_time:.0f}s (~{hours:.1f}h)")
-    elif minutes >= 1:
-        print(f"   {total_estimated_time:.0f}s (~{minutes:.1f}min)")
-    else:
-        print(f"   {total_estimated_time:.0f}s")
-
-    print(f"   ({len(config.sample_sizes)} sizes × {iterations} iterations × {len(base_times)} imputers)")
-    print("=" * 50)
 
     return total_estimated_time
 
 
 def benchmark():
-    # Estimate and display total time
+    # Estimate total time (no display)
     estimated_time = estimate_total_time()
 
     # Measure actual execution time
@@ -506,10 +485,6 @@ def benchmark():
         print("\nP-values:")
         pprint(p_values)
 
-        print(f"\n\nExecution times for seed: {seed}\n")
-        print(
-            tabulate(et_table_data, headers="keys", tablefmt="grid", numalign="center")
-        )
 
         # Create individual plots for this iteration as before
         # Display RMSE and Energy Distance non-blocking at each iteration
@@ -544,57 +519,25 @@ def benchmark():
     plot_aggregated_results_per_size(p_means_map, p_stds_map, "P-Value", config.sample_sizes, block=False)
 
 
-    # Calculate and display the difference between estimated and actual time
+    # Calculate and display only the total execution time
     end_time = time.perf_counter()
-    actual_time = end_time - start_time
+    total_execution_time = end_time - start_time
 
     print(f"\n{'=' * 60}")
-    print("ESTIMATED vs ACTUAL TIME COMPARISON:")
+    print("TOTAL EXECUTION TIME")
     print("=" * 60)
 
-    actual_minutes = actual_time / 60
-    actual_hours = actual_minutes / 60
-    estimated_minutes = estimated_time / 60
-    estimated_hours = estimated_minutes / 60
+    minutes = total_execution_time / 60
+    hours = minutes / 60
 
-    # Display actual time
-    if actual_hours >= 1:
-        actual_str = f"{actual_time:.0f}s (~{actual_hours:.1f}h)"
-    elif actual_minutes >= 1:
-        actual_str = f"{actual_time:.0f}s (~{actual_minutes:.1f}min)"
+    if hours >= 1:
+        time_str = f"{total_execution_time:.0f}s (~{hours:.1f}h)"
+    elif minutes >= 1:
+        time_str = f"{total_execution_time:.0f}s (~{minutes:.1f}min)"
     else:
-        actual_str = f"{actual_time:.0f}s"
+        time_str = f"{total_execution_time:.0f}s"
 
-    # Display estimated time
-    if estimated_hours >= 1:
-        estimated_str = f"{estimated_time:.0f}s (~{estimated_hours:.1f}h)"
-    elif estimated_minutes >= 1:
-        estimated_str = f"{estimated_time:.0f}s (~{estimated_minutes:.1f}min)"
-    else:
-        estimated_str = f"{estimated_time:.0f}s"
-
-    print(f"Estimated time:  {estimated_str}")
-    print(f"Actual time:     {actual_str}")
-
-    # Calculate the difference
-    time_diff = actual_time - estimated_time
-    diff_percentage = (time_diff / estimated_time) * 100
-
-    if abs(time_diff) < 30:  # Less than 30s difference
-        accuracy_msg = "Very precise estimation!"
-    elif abs(diff_percentage) < 20:  # Less than 20% difference
-        accuracy_msg = "Good estimation"
-    elif abs(diff_percentage) < 50:  # Less than 50% difference
-        accuracy_msg = "Approximate estimation"
-    else:
-        accuracy_msg = "Estimation needs improvement"
-
-    if time_diff > 0:
-        print(f"Difference:      +{time_diff:.0f}s ({diff_percentage:+.1f}%) - Slower than expected")
-    else:
-        print(f"Difference:      {time_diff:.0f}s ({diff_percentage:+.1f}%) - Faster than expected")
-
-    print(f"{accuracy_msg}")
+    print(f"Total execution time: {time_str}")
     print("=" * 60)
 
     # Display the last blocking plot after all prints
