@@ -41,7 +41,7 @@ class MissingConfig:
 
 # 30% for each size
 mar_config = MissingConfig(Mar(0.5, 1.5, Rate(0.3)), [3000], 200)
-mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000, 5000, 7000], 200)
+mcar_config = MissingConfig(Mcar(Rate(0.3)), [2000], 200)
 
 ###### configuration selection ######
 config: MissingConfig = mcar_config
@@ -60,7 +60,7 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
 }
 
 ## KnnSampler config ##
-iterations = 5
+iterations = 2  # Aligned with Imputation-full-code (1).py range(2)
 #######################
 
 # Data regeneration policy
@@ -275,9 +275,13 @@ def evaluate_imputers(
             )
         )
         energy_distance = multivariate_energy_distance_imputed(
-            context.predicted_data.to_numpy(), context.actual_data.to_numpy()
+            context.predicted_data[context.dataset_descriptor.target_column].to_numpy().reshape(-1, 1),
+            context.actual_data[context.dataset_descriptor.target_column].to_numpy().reshape(-1, 1)
         )
-        Z = pd.concat([context.predicted_data, context.actual_data], ignore_index=True)
+        Z = pd.concat([
+            context.predicted_data[context.dataset_descriptor.target_column],
+            context.actual_data[context.dataset_descriptor.target_column]
+        ], ignore_index=True).to_frame()
         p_value = calculate_p_value(
             permutation_test(Z, config.n_permutations), energy_distance
         )
@@ -467,7 +471,8 @@ def benchmark():
     agg_p: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
 
     results_per_iteration: dict[tuple[int, int], tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]] = {}
-    base_seed = np.random.randint(1, 1 * 10**8)
+    # Fixed base seed for reproducibility and alignment with Imputation-full-code (1).py
+    base_seed = 42  # Same as random_state used in estimators
 
     for iteration in (bar := trange(iterations)):
         seed = base_seed + iteration
