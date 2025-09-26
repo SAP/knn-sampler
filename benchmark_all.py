@@ -19,10 +19,14 @@ from src.data_preparation.data_preparation import ExcelDataPreparator, DataGener
 from src.data_preparation.dataset_description import (
     Datasets,
 )
-from src.imputation import KnnImputer, KnnSampler, RandomForestImputer
+from src.imputation import (
+    KnnImputer,
+    KnnSampler,
+    KNNxKDEImputer,
+    LinearImputer,
+    RandomForestImputer,
+)
 from src.imputation.imputer import Imputer
-from src.imputation.knnxkdeimputer import KNNxKDEImputer
-from src.imputation.miceimputer import MICEImputer
 from src.imputation_context import ImputationContext
 from src.stats_utils import (
     calculate_p_value,
@@ -56,7 +60,7 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
     KnnImputer: {"n_neighbors": 5},
     RandomForestImputer: {"random_state": 42},
     KNNxKDEImputer: {"h": 0.03, "tau": 0.05},
-    MICEImputer: {"max_iter": 10},
+    LinearImputer: {},
 }
 
 ## KnnSampler config ##
@@ -80,10 +84,10 @@ type Metric = tuple[dict[str, float], dict[str, float]]
 type Benchmark = tuple[Metric, Metric, Metric, list[dict[str, str]]]
 
 
-root_rmse_values: dict[str, list[np.floating | float]]
-root_ed_values: dict[str, list[np.floating | float]]
-root_p_values: dict[str, list[float]]
-root_et_values: dict[str, list[float]]
+# root_rmse_values: dict[str, list[np.floating | float]]
+# root_ed_values: dict[str, list[np.floating | float]]
+# root_p_values: dict[str, list[float]]
+# root_et_values: dict[str, list[float]]
 
 
 def plot_results(
@@ -220,9 +224,14 @@ def plot_aggregated_results_per_size(
         )
 
     plt.xlabel("Sample Size")
-    plt.ylabel(f"{metric_name} Value")
-    plt.title(f"{metric_name} - Aggregated over iterations")
-    plt.legend(loc="center left", fontsize=10, bbox_to_anchor=(1, 0.5))
+    plt.ylabel("Mean Value")
+    plt.title(f"Aggregated Mean and Standard Deviation of {metric_name} over {iterations} iterations")
+    plt.legend(
+        loc="upper center",
+        fontsize=12,
+        bbox_to_anchor=(0.5, -0.1),
+        ncol=round(len(methods) / 2.0),
+    )
     plt.grid(True)
     plt.xticks(x_indices, [*map(str, sample_sizes)])
     plt.tight_layout()
@@ -297,7 +306,7 @@ def evaluate_imputers(
 
 
 def benchmark_for_seed(seed: int | None = None) -> tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]:
-    if seed:
+    if seed is not None:
         np.random.seed(seed)
 
     rmse_values = defaultdict(list)
