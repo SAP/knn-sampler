@@ -39,3 +39,4 @@ class MICEImputer(Imputer):
         imputed_df[self.ml_data.dataset_descriptor.input_column] = imputed_values[:, 0]
         imputed_df[self.ml_data.dataset_descriptor.target_column] = imputed_values[:, 1]
         return imputed_df
+

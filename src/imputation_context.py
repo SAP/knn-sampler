@@ -37,6 +37,13 @@ class ImputationContext:
         # merge original and actual values to get the full dataframe
         full_df = original_df.copy()
         full_df.loc[missing_mask, y] = actual_values
+        # If MCAR was generated with replacement, actual_values may have duplicate indices.
+        # Deduplicate and align to the missing index order to avoid reindex errors.
+        # if isinstance(actual_values, pd.Series) and actual_values.index.has_duplicates:
+        #     actual_values = actual_values[~actual_values.index.duplicated(keep="first")]
+        # missing_index_labels = original_df.index[missing_mask]
+        # actual_values_aligned = actual_values.reindex(missing_index_labels)
+        # full_df.loc[missing_mask, y] = actual_values_aligned.values
 
         # create a dataframe with only the non-NaN values
         context_only_df = original_df[~missing_mask].copy()
