@@ -471,8 +471,7 @@ def benchmark():
     agg_p: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
 
     results_per_iteration: dict[tuple[int, int], tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], list[dict[str, str]]]] = {}
-    # Fixed base seed for reproducibility and alignment with Imputation-full-code (1).py
-    base_seed = 42  # Same as random_state used in estimators
+    base_seed = np.random.randint(1, 1 * 10**8)
 
     for iteration in (bar := trange(iterations)):
         seed = base_seed + iteration
