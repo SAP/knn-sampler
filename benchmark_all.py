@@ -41,7 +41,7 @@ class MissingConfig:
 
 # 30% for each size
 mar_config = MissingConfig(Mar(0.5, 1.5, Rate(0.3)), [3000], 200)
-mcar_config = MissingConfig(Mcar(Rate(0.3)), [2000], 200)
+mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000, 5000, 7000], 200)
 
 ###### configuration selection ######
 config: MissingConfig = mcar_config
@@ -269,7 +269,10 @@ def evaluate_imputers(
     execution_times: dict[Imputer, float] = {}
     for imputer, context in result_contexts.items():
         rmse_value = math.sqrt(
-            mean_squared_error(context.actual_data, context.predicted_data)
+            mean_squared_error(
+                context.actual_data[context.dataset_descriptor.target_column],
+                context.predicted_data[context.dataset_descriptor.target_column]
+            )
         )
         energy_distance = multivariate_energy_distance_imputed(
             context.predicted_data.to_numpy(), context.actual_data.to_numpy()
