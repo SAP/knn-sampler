@@ -20,7 +20,7 @@ class KnnImputer(Imputer):
                     self.ml_data.dataset_descriptor.input_column,
                     self.ml_data.dataset_descriptor.target_column,
                 ]
-            ].values
+            ].to_numpy()
         )
         imputed_df[self.ml_data.dataset_descriptor.target_column] = imputed_values[:, 1]
 
