@@ -12,7 +12,7 @@ class KNNxKDEImputer(Imputer):
         self,
         ml_data: DataFrameMLData,
         h=0.03,
-        tau=50.0 / 1000.0,
+        tau=1.0 / 50.0,
         metric: KNNxKdeMetric = "nan_std_eucl",
     ):
         super().__init__(ml_data)
