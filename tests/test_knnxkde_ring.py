@@ -31,12 +31,12 @@ class TestKNNxKDERing:
         imputer = KNNxKDEImputer(ml_data=data)
 
         # Verify default tau is correct
-        assert (
-            imputer.knnxkde.tau == 0.02
-        ), f"Default tau should be 0.02, got {imputer.knnxkde.tau}"
-        assert (
-            imputer.knnxkde.h == 0.03
-        ), f"Default h should be 0.03, got {imputer.knnxkde.h}"
+        assert imputer.knnxkde.tau == 0.02, (
+            f"Default tau should be 0.02, got {imputer.knnxkde.tau}"
+        )
+        assert imputer.knnxkde.h == 0.03, (
+            f"Default h should be 0.03, got {imputer.knnxkde.h}"
+        )
 
         # Run imputation
         imputer.fit()
@@ -55,19 +55,17 @@ class TestKNNxKDERing:
 
         # Assertions
         # 1. Radius std should be reasonably close to complete data std
-        assert (
-            radii_imputed.std() < 0.18
-        ), f"Imputed radius std ({radii_imputed.std():.4f}) should be < 0.18 (was 0.21 before fix)"
+        assert radii_imputed.std() < 0.18, (
+            f"Imputed radius std ({radii_imputed.std():.4f}) should be < 0.18 (was 0.21 before fix)"
+        )
 
         # 2. Radius mean should be close to 1.0 (expected ring radius)
-        assert (
-            0.95 < radii_imputed.mean() < 1.05
-        ), f"Imputed radius mean ({radii_imputed.mean():.4f}) should be ~1.0"
+        assert 0.95 < radii_imputed.mean() < 1.05, (
+            f"Imputed radius mean ({radii_imputed.mean():.4f}) should be ~1.0"
+        )
 
         # 3. RMSE should be reasonable (note: high RMSE is expected due to X-only distance)
-        assert (
-            rmse < 1.05
-        ), f"RMSE ({rmse:.4f}) should be < 1.05 (was ~1.02 before fix)"
+        assert rmse < 1.05, f"RMSE ({rmse:.4f}) should be < 1.05 (was ~1.02 before fix)"
 
     def test_tau_parameter_effect(self, ring_data):
         """Test that smaller tau produces tighter distributions"""
@@ -104,9 +102,9 @@ class TestKNNxKDERing:
         )
 
         # Smaller tau should produce tighter (smaller std) distribution
-        assert (
-            radii_default.std() < radii_large.std()
-        ), f"Smaller tau ({radii_default.std():.4f}) should produce tighter distribution than larger tau ({radii_large.std():.4f})"
+        assert radii_default.std() < radii_large.std(), (
+            f"Smaller tau ({radii_default.std():.4f}) should produce tighter distribution than larger tau ({radii_large.std():.4f})"
+        )
 
     def test_h_parameter_effect(self, ring_data):
         """Test that bandwidth h affects smoothness"""
@@ -143,9 +141,9 @@ class TestKNNxKDERing:
         )
 
         # Both should have reasonable radius distributions
-        assert (
-            0.95 < radii_small.mean() < 1.05
-        ), f"Small h: radius mean ({radii_small.mean():.4f}) should be ~1.0"
-        assert (
-            0.95 < radii_large.mean() < 1.05
-        ), f"Large h: radius mean ({radii_large.mean():.4f}) should be ~1.0"
+        assert 0.95 < radii_small.mean() < 1.05, (
+            f"Small h: radius mean ({radii_small.mean():.4f}) should be ~1.0"
+        )
+        assert 0.95 < radii_large.mean() < 1.05, (
+            f"Large h: radius mean ({radii_large.mean():.4f}) should be ~1.0"
+        )
