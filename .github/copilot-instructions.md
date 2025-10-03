@@ -24,11 +24,13 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 
 ## Statistical conventions
 
+- **Hypothesis testing**: use a single test statistic (e.g., t-test) when possible.
 - **Divergence metrics**: document direction explicitly (e.g., KL(A||B) vs KL(B||A)); normalize distributions; add epsilon to avoid numerical issues.
 - **Distance vs divergence**: distinguish clearly; use consistent terminology.
 - **Effect sizes**: report alongside test statistics and p-values; use standard formulas; document directional interpretation.
 - **Distribution comparisons**: use multiple complementary metrics (parametric and non-parametric).
-- **Correlations**: prefer robust methods; report confidence intervals when feasible; document assumptions.
+- **Correlations**: prefer robust estimators; report the correlation estimate with a confidence interval (parametric or bootstrap) when feasible.
+- **Uncertainty quantification**: use confidence intervals or credible intervals methods when feasible.
 - **Normality tests**: combine visual diagnostics (e.g., QQ plots) with formal tests when assumptions matter.
 - **Multiple testing**: document corrections or acknowledge their absence.
 
