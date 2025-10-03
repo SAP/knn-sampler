@@ -8,6 +8,18 @@ from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
 
 
 class KNNxKDEImputer(Imputer):
+    """KNN x KDE imputer for missing value imputation.
+
+    Uses k-nearest neighbors with kernel density estimation to impute missing values.
+    Data is scaled to [0,1] using MinMaxScaler before imputation.
+
+    Args:
+        ml_data: DataFrameMLData containing the dataset
+        h: KDE bandwidth parameter (default: 0.03)
+        tau: Softmax temperature for neighbor weighting (default: 0.02)
+        metric: Distance metric ("nan_eucl" or "nan_std_eucl")
+    """
+
     def __init__(
         self,
         ml_data: DataFrameMLData,
