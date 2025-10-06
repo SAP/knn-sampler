@@ -10,13 +10,14 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 ## Core principles
 
 - **Design patterns**: prefer established patterns (e.g., factory, singleton, strategy) for code organization and extensibility.
-- **Algorithmic**: prefer algorithms or heuristics minimizing time and space complexity.
+- **Algorithmic**: prefer algorithms or heuristics solving the problem while minimizing time and space complexity.
 - **DRY**: avoid duplication of logic, data, and naming. Factor out commonalities.
 - **Single source of truth**: maintain a canonical defaults map for configuration tunables. Derive all user-facing options automatically.
 - **Naming coherence**: prefer semantically accurate names across code, documentation, directories, and outputs. Avoid synonyms that create ambiguity.
 - **English-only**: code, tests, logs, comments, and documentation must be in English.
 - **Small, verifiable changes**: prefer minimal diffs that keep public behavior stable unless explicitly requested.
 - **Tests-first mindset**: add or update minimal tests before refactoring or feature changes.
+- **Documentation standards**: must follow established standards for programming languages.
 
 ## Options and configuration
 
@@ -29,7 +30,6 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 
 - **Hypothesis testing**: use a single test statistic (e.g., t-test) when possible.
 - **Divergence metrics**: document direction explicitly (e.g., KL(A||B) vs KL(B||A)); normalize distributions; add numerical stability measures.
-- **Distance vs divergence**: distinguish clearly; use consistent terminology.
 - **Effect sizes**: report alongside test statistics and p-values; use standard formulas; document directional interpretation.
 - **Distribution comparisons**: use multiple complementary metrics (parametric and non-parametric).
 - **Correlations**: prefer robust estimators; report the correlation estimate with a confidence interval (parametric or bootstrap) when feasible.
@@ -51,20 +51,38 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 - **Interpretation**: include threshold guidelines; avoid overclaiming certainty.
 - **Artifacts**: timestamp outputs; include configuration metadata.
 
+## Documentation conventions
+
+- **Clarity**: plain, unambiguous language; avoid marketing jargon and speculation.
+- **Concision**: remove boilerplate; state facts directly without redundant phrasing.
+- **Structure**: use consistent section ordering; follow stable patterns for comparable content.
+- **Timeliness**: document current state; exclude historical evolution (except brief API breaking change notes).
+- **Terminology**: use correct and consistent terminology; distinguish clearly between related concepts.
+- **Exhaustivity**: cover all user-facing behavior and constraints; omit internal implementation details unless necessary for usage.
+- **Pertinence**: include information that aids understanding or usage; remove tangential content.
+- **No duplication**: maintain single authoritative documentation source; reference other sources rather than copying.
+
+Documentation serves as an operational specification, not narrative prose.
+
 ## Implementation guidance for Copilot
 
 - **Before coding**:
-  - Locate and analyze thoroughly relevant existing code.
-  - Identify code architecture and design patterns.
-  - Identify canonical defaults and naming patterns.
+  - Locate and analyze thoroughly existing relevant code.
+  - Identify existing code architecture, design patterns, canonical defaults, naming patterns and coding styles.
+- **When coding**:
+  - Follow identified design patterns, naming patterns and coding styles.
+  - Prioritize algorithmic efficiency.
+  - Write minimal, verifiable changes that preserve existing behavior when possible.
 - **When adding a tunable**:
-  - Add to defaults with safe value.
+  - Add to canonical defaults with safe value.
   - Update documentation and serialization.
 - **When implementing analytical methods**:
   - Follow statistical conventions above.
 - **When refactoring**:
   - Keep APIs stable; provide aliases if renaming.
-  - Update code, tests, and docs atomically.
+  - Update code, tests, and documentations atomically.
+- **When documenting**:
+  - Follow documentation conventions above.
 
 ## Quality gates
 
