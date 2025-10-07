@@ -25,7 +25,7 @@ These instructions guide GitHub Copilot to generate changes consistent with this
   - Ensure the options and configuration section below is respected.
   - Update documentation and serialization.
 - **When implementing simulation or synthetic data generation**:
-  - Ensure simulation and synthetic data generation section below is respected.
+  - Ensure the simulation and synthetic data generation section below is respected.
 - **When implementing analytical methods**:
   - Follow statistical conventions below.
 - **When refactoring**:
