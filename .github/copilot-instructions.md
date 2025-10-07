@@ -12,7 +12,7 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 - **Before coding**:
   - Perform a comprehensive inventory of the codebase. Search for and read:
     - README.md, CONTRIBUTING.md, and all other documentation files.
-    - relevant code files related to the task.
+    - code files related to the task.
   - Identify existing code architecture, design patterns, canonical defaults, naming patterns and coding styles.
 - **When coding**:
   - Follow the core principles below.
@@ -22,15 +22,15 @@ These instructions guide GitHub Copilot to generate changes consistent with this
   - Ensure changes pass quality gates below.
 - **When adding a tunable**:
   - Add to canonical defaults with safe value.
-  - Ensure options and configuration section below is respected.
+  - Ensure the options and configuration section below is respected.
   - Update documentation and serialization.
-- **When implementing synthetic data generation**:
-  - Ensure simulation and synthetic data generation section below is respected.
+- **When implementing simulation or synthetic data generation**:
+  - Ensure the simulation and synthetic data generation section below is respected.
 - **When implementing analytical methods**:
   - Follow statistical conventions below.
 - **When refactoring**:
   - Keep APIs stable; provide aliases if renaming.
-  - Update code, tests, and documentations atomically.
+  - Update code, tests, and documentation atomically.
 - **When documenting**:
   - Follow documentation conventions below.
 
@@ -95,7 +95,7 @@ Documentation serves as an operational specification, not narrative prose.
 
 - Documented build/lint/type checks pass (where applicable).
 - Documented tests pass (where applicable).
-- Documentation updated to reflect changes.
+- Documentation updated to reflect changes when necessary.
 - Logs use appropriate levels (error, warn, info, debug).
 - Pull request title and commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) format.
 
