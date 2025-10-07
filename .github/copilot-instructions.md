@@ -7,6 +7,33 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 - **Tunables**: user-adjustable parameters that shape behavior, exposed via options or configuration files.
 - **Canonical defaults**: the single, authoritative definition of all tunables and their defaults.
 
+## Implementation guidance for Copilot
+
+- **Before coding**:
+  - Perform a comprehensive inventory of the codebase. Search for and read:
+    - README.md, CONTRIBUTING.md, and all other documentation files.
+    - relevant code files related to the task.
+  - Identify existing code architecture, design patterns, canonical defaults, naming patterns and coding styles.
+- **When coding**:
+  - Follow the core principles below.
+  - Follow identified design patterns, naming patterns and coding styles.
+  - Write minimal, verifiable changes that preserve existing behavior when possible.
+- **After coding**:
+  - Ensure changes pass quality gates below.
+- **When adding a tunable**:
+  - Add to canonical defaults with safe value.
+  - Ensure options and configuration section below is respected.
+  - Update documentation and serialization.
+- **When implementing synthetic data generation**:
+  - Ensure simulation and synthetic data generation section below is respected.
+- **When implementing analytical methods**:
+  - Follow statistical conventions below.
+- **When refactoring**:
+  - Keep APIs stable; provide aliases if renaming.
+  - Update code, tests, and documentations atomically.
+- **When documenting**:
+  - Follow documentation conventions below.
+
 ## Core principles
 
 - **Design patterns**: prefer established patterns (e.g., factory, singleton, strategy) for code organization and extensibility.
@@ -37,7 +64,7 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 - **Normality tests**: combine visual diagnostics (e.g., QQ plots) with formal tests when assumptions matter.
 - **Multiple testing**: document corrections or acknowledge their absence.
 
-## Simulation and data generation
+## Simulation and synthetic data generation
 
 - **Realism**: correlate synthetic outcomes with causal factors to reflect plausible behavior.
 - **Reproducibility**: use explicit random seeds; document them.
@@ -64,33 +91,13 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 
 Documentation serves as an operational specification, not narrative prose.
 
-## Implementation guidance for Copilot
-
-- **Before coding**:
-  - Locate and analyze thoroughly existing relevant code.
-  - Identify existing code architecture, design patterns, canonical defaults, naming patterns and coding styles.
-- **When coding**:
-  - Follow identified design patterns, naming patterns and coding styles.
-  - Prioritize algorithmic efficiency.
-  - Write minimal, verifiable changes that preserve existing behavior when possible.
-- **When adding a tunable**:
-  - Add to canonical defaults with safe value.
-  - Update documentation and serialization.
-- **When implementing analytical methods**:
-  - Follow statistical conventions above.
-- **When refactoring**:
-  - Keep APIs stable; provide aliases if renaming.
-  - Update code, tests, and documentations atomically.
-- **When documenting**:
-  - Follow documentation conventions above.
-
 ## Quality gates
 
-- Build/lint/type checks pass (where applicable).
-- Tests pass (where applicable).
+- Documented build/lint/type checks pass (where applicable).
+- Documented tests pass (where applicable).
 - Documentation updated to reflect changes.
 - Logs use appropriate levels (error, warn, info, debug).
-- PR title and commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) format.
+- Pull request title and commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) format.
 
 ## Examples
 
