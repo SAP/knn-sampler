@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 
 from src.data_preparation.data_description import DataFrameMLData
 from src.imputation import Imputer
@@ -11,7 +11,7 @@ class KNNxKDEImputer(Imputer):
     """KNN x KDE imputer for missing value imputation.
 
     Uses k-nearest neighbors with kernel density estimation to impute missing values.
-    Data is scaled to [0,1] using MinMaxScaler before imputation.
+    Data is standardized (zero mean, unit variance) using StandardScaler before imputation.
 
     Args:
         ml_data: DataFrameMLData containing the dataset
@@ -36,7 +36,7 @@ class KNNxKDEImputer(Imputer):
 
     def _execute(self) -> pd.DataFrame:
         imputed_df = self.ml_data.df
-        scaler = MinMaxScaler()
+        scaler = StandardScaler()
         imputed_df[
             [
                 self.ml_data.dataset_descriptor.input_column,

@@ -55,8 +55,9 @@ class TestKNNxKDERing:
 
         # Assertions
         # 1. Radius std should be reasonably close to complete data std
-        assert radii_imputed.std() < 0.18, (
-            f"Imputed radius std ({radii_imputed.std():.4f}) should be < 0.18 (was 0.21 before fix)"
+        assert radii_imputed.std() < 0.14, (
+            f"Imputed radius std ({radii_imputed.std():.4f}) should be < 0.14 "
+            f"(was 0.21 before fixes, 0.17 after tau fix, 0.12 after both fixes)"
         )
 
         # 2. Radius mean should be close to 1.0 (expected ring radius)
