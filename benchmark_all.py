@@ -467,54 +467,9 @@ def benchmark_for_seed(
     )
 
 
-def estimate_total_time():
-    """Estimate total execution time based on parameters"""
-
-    # Base time per imputer (in seconds) for 1000 samples with 30% missing
-    base_times = {
-        "KnnSampler": 2.0,  # O(n²) for k-NN
-        "KnnImputer": 0.5,  # Simpler
-        "RandomForestImputer": 1.5,  # O(n*log(n))
-        "KNNxKDEImputer": 3.0,  # More complex with KDE
-        "MICEImputer": 4.0,  # Iterative, slower
-    }
-
-    total_estimated_time = 0
-
-    for sample_size in config.sample_sizes:
-        missing_count = int(sample_size * 0.3)  # 30% missing
-
-        # Scale factor based on algorithmic complexity
-        scale_factor = sample_size / 1000
-
-        sample_time = 0
-        for imputer_name, base_time in base_times.items():
-            # Different algorithmic complexities
-            if "Knn" in imputer_name:
-                # O(n²) for k-NN
-                imputer_time = base_time * (scale_factor**1.5)
-            elif "RandomForest" in imputer_name:
-                # O(n*log(n)) for Random Forest
-                imputer_time = base_time * scale_factor * math.log(scale_factor + 1)
-            else:
-                # O(n) linear for others
-                imputer_time = base_time * scale_factor
-
-            sample_time += imputer_time
-
-        iteration_time = sample_time * iterations
-        total_estimated_time += iteration_time
-
-    # Add overhead time (permutation tests, plots, etc.)
-    overhead_time = total_estimated_time * 0.2  # 20% overhead
-    total_estimated_time += overhead_time
-
-    return total_estimated_time
-
 
 def benchmark():
     # Estimate total time (no display)
-    estimated_time = estimate_total_time()
 
     # Measure actual execution time
     start_time = time.perf_counter()
