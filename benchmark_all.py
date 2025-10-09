@@ -364,7 +364,6 @@ def benchmark_for_seed(
     p_values = defaultdict(list)
     et_table_data: list[dict[str, str]] = []
 
-    # TODO: make this cleaner
     if REGENERATE_DATA_PER_METHOD:
         # For each sample size and each imputer, regenerate the dataset and evaluate only that method
         for _, sample_size in (
