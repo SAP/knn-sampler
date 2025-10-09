@@ -467,7 +467,6 @@ def benchmark_for_seed(
     )
 
 
-
 def benchmark():
     # Estimate total time (no display)
 
