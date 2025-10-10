@@ -6,12 +6,19 @@ from sklearn.metrics.pairwise import euclidean_distances, nan_euclidean_distance
 
 
 def select_receivers(norm_miss_data, current_miss_pattern):
-    """Select the observations matching the missing pattern.
-    Args:
-        - norm_miss_data: normalized missing data, shape (n, d)
-        - current_miss_pattern: current missing pattern, boolean of shape (d,)
-    Return:
-        - id_receivers: list of id corresponding to the rows matching the missing pattern
+    """Select observations matching the specified missing pattern.
+
+    Parameters
+    ----------
+    norm_miss_data : np.ndarray
+        Normalized missing data of shape (n, d).
+    current_miss_pattern : np.ndarray
+        Current missing pattern, boolean array of shape (d,).
+
+    Returns
+    -------
+    np.ndarray
+        Array of indices corresponding to rows matching the missing pattern.
     """
     (n, d) = norm_miss_data.shape
     final_filter = np.ones(n).astype("bool")
@@ -23,12 +30,19 @@ def select_receivers(norm_miss_data, current_miss_pattern):
 
 
 def select_givers(norm_miss_data, current_miss_pattern):
-    """Select the observations having all entries for the missing pattern.
-    Args:
-        - norm_miss_data: normalized missing data, shape (n, d)
-        - current_miss_pattern: current missing pattern, boolean of shape (d, )
-    Return:
-        - id_givers: list of id corresponding to potential givers for kNNxKDE
+    """Select observations with complete entries for the missing pattern.
+
+    Parameters
+    ----------
+    norm_miss_data : np.ndarray
+        Normalized missing data of shape (n, d).
+    current_miss_pattern : np.ndarray
+        Current missing pattern, boolean array of shape (d,).
+
+    Returns
+    -------
+    np.ndarray
+        Array of indices corresponding to potential donor observations for kNNxKDE.
     """
     (n, d) = norm_miss_data.shape
     final_filter = np.ones(n).astype("bool")
@@ -41,15 +55,24 @@ def select_givers(norm_miss_data, current_miss_pattern):
 
 
 def nan_std_euclidean_distances(data_receivers, data_givers, sigmas):
-    """Compute the NaN-Euclidean distance between data_receivers and
-    data_givers, using the standard deviation of the features when at
-    least one observation is missing.
-    Args:
-        - data_receivers: normalized data for receivers, shape (n1, d)
-        - data_givers: normalized data for givers, shape (n2, d)
-        - sigmas: array of standard deviations, shape (d,)
-    Return:
-        - dist: NaN-Euclidean distance using standard deviation, shape (n1, n2)
+    """Compute NaN-aware standardized Euclidean distance between receiver and donor data.
+
+    Uses feature standard deviations to adjust distances when observations contain
+    missing values, ensuring consistent distance computation across incomplete patterns.
+
+    Parameters
+    ----------
+    data_receivers : np.ndarray
+        Normalized data for receiver observations of shape (n1, d).
+    data_givers : np.ndarray
+        Normalized data for donor observations of shape (n2, d).
+    sigmas : np.ndarray
+        Feature standard deviations of shape (d,).
+
+    Returns
+    -------
+    np.ndarray
+        NaN-aware standardized Euclidean distances of shape (n1, n2).
     """
     X = np.copy(data_receivers)
     Y = np.copy(data_givers)
@@ -74,6 +97,28 @@ type KNNxKdeMetric = Literal["nan_eucl"] | Literal["nan_std_eucl"]
 
 
 class KNNxKDE:
+    """Hybrid k-nearest neighbors and kernel density estimation imputer.
+
+    Combines distance-based neighbor selection with kernel density estimation
+    to generate realistic imputed values for missing data patterns.
+
+    Parameters
+    ----------
+    h : float, default=0.03
+        Kernel bandwidth parameter for density estimation.
+    tau : float, default=0.02
+        Temperature parameter for distance-based neighbor weighting.
+    metric : {'nan_eucl', 'nan_std_eucl'}, default='nan_std_eucl'
+        Distance metric for neighbor selection:
+        - 'nan_eucl': NaN-aware Euclidean distance
+        - 'nan_std_eucl': NaN-aware standardized Euclidean distance
+
+    Raises
+    ------
+    AttributeError
+        If metric is not one of the supported options.
+    """
+
     def __init__(
         self,
         h=0.03,
@@ -88,6 +133,25 @@ class KNNxKDE:
             raise AttributeError("Metric should be 'nan_eucl' or 'nan_std_eucl'")
 
     def impute_samples(self, miss_data, nb_draws=1000):
+        """Generate multiple imputed samples using KNNxKDE methodology.
+
+        For each missing value pattern, identifies donor observations, computes
+        distance-weighted probabilities, and generates samples via kernel density
+        estimation over selected neighbors.
+
+        Parameters
+        ----------
+        miss_data : np.ndarray
+            Data matrix with missing values of shape (n, d).
+        nb_draws : int, default=1000
+            Number of samples to generate for each missing cell.
+
+        Returns
+        -------
+        dict or None
+            Dictionary mapping (row_idx, col_idx) tuples to arrays of imputed samples.
+            Returns None if imputation cannot be performed (no suitable donors).
+        """
         (_, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
@@ -134,6 +198,24 @@ class KNNxKDE:
         return imputed_samples
 
     def impute_mean(self, miss_data, nb_draws=1000):
+        """Generate mean-based imputations using KNNxKDE methodology.
+
+        Similar to impute_samples but returns the mean of generated samples
+        rather than individual samples, providing point estimates.
+
+        Parameters
+        ----------
+        miss_data : np.ndarray
+            Data matrix with missing values of shape (n, d).
+        nb_draws : int, default=1000
+            Number of samples to generate for computing means.
+
+        Returns
+        -------
+        np.ndarray or None
+            Copy of input data with missing values replaced by mean estimates.
+            Returns None if imputation cannot be performed.
+        """
         (_, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
@@ -182,6 +264,22 @@ class KNNxKDE:
         return imputed_data
 
     def local_distribution(self, miss_data):
+        """Compute local probability distributions for missing value patterns.
+
+        Analyzes neighborhood structure and distance-based weights to characterize
+        the local distribution around each missing value pattern.
+
+        Parameters
+        ----------
+        miss_data : np.ndarray
+            Data matrix with missing values of shape (n, d).
+
+        Returns
+        -------
+        dict
+            Dictionary storing local distribution parameters (weights, values)
+            for each missing pattern.
+        """
         (_, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
