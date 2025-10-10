@@ -87,7 +87,7 @@ This project is open to feature requests and bug reports via [GitHub issues](htt
 ### Install development dependencies
 
 ```shell
-poetry install --no-root --with dev 
+poetry install --no-root --with dev
 ```
 
 ### Code formatting
