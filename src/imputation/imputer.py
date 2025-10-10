@@ -45,16 +45,27 @@ class UncertaintyImputer(Imputer):
     def __init__(
         self,
         ml_data: DataFrameMLData,
-        lower_percentile: list[float],
-        upper_percentile: list[float],
+        lower_percentiles: list[float],
+        upper_percentiles: list[float],
         compute_bounds: bool = True,
     ):
         super().__init__(ml_data=ml_data)
-        if (ll := len(lower_percentile)) != (ul := len(upper_percentile)):
-            raise ValueError(
-                f"lower and upper bounds length are expected to be equal, got {ll} and {ul}"
-            )
+        UncertaintyImputer._validate_percentiles(lower_percentiles, upper_percentiles)
         self.bounds = {}
-        self.lower_percentiles = lower_percentile
-        self.upper_percentiles = upper_percentile
+        self.lower_percentiles = lower_percentiles
+        self.upper_percentiles = upper_percentiles
         self.compute_bounds: bool = compute_bounds
+
+    @staticmethod
+    def _validate_percentiles(
+        lower_percentiles: list[float], upper_percentiles: list[float]
+    ) -> None:
+        if len(lower_percentiles) != len(upper_percentiles):
+            raise ValueError(
+                "lower_percentiles and upper_percentiles must have equal length"
+            )
+        for lp, up in zip(lower_percentiles, upper_percentiles, strict=False):
+            if not (0.0 <= lp < up <= 100.0):
+                raise ValueError(
+                    f"Invalid percentile pair ({lp}, {up}). Require 0 <= lower < upper <= 100."
+                )
