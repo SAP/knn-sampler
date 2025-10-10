@@ -45,7 +45,7 @@ class KnnImputer(Imputer):
         pd.DataFrame
             DataFrame with missing values imputed via KNN algorithm.
         """
-        df = self.ml_data.df.copy()
+        df = self.ml_data.df
         input_col = self.ml_data.dataset_descriptor.input_column
         target_col = self.ml_data.dataset_descriptor.target_column
 
