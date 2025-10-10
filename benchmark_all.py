@@ -47,7 +47,7 @@ class MissingConfig:
 
 # 30% for each size
 mar_config = MissingConfig(Mar(0.5, 1.5, Rate(0.3)), [3000], 200)
-mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000], 200)
+mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000, 5000], 200)
 
 ###### configuration selection ######
 config: MissingConfig = mcar_config
@@ -90,69 +90,6 @@ type Benchmark = tuple[Metric, Metric, Metric, list[dict[str, str]]]
 # root_ed_values: dict[str, list[np.floating | float]]
 # root_p_values: dict[str, list[float]]
 # root_et_values: dict[str, list[float]]
-
-
-def plot_results(
-    values: dict[str, list[float]],
-    metric_name: str,
-    sample_sizes: list[int],
-    block: bool,
-    seed: int | None = None,
-) -> None:
-    methods = list(values.keys())
-
-    # Colors according to reference image - Order: kNNSampler → Random Forest → kNNImputer → KNNxKDE → MICE
-    methods_order = [
-        "KnnSampler",
-        "RandomForestImputer",
-        "KnnImputer",
-        "KNNxKDEImputer",
-        "MICEImputer",
-    ]
-    colors = [
-        "#1f77b4",
-        "#2ca02c",
-        "#9467bd",
-        "#ffb6c1",
-        "#d4af37",
-    ]  # Blue, Green, Purple, Light pink, Beige/gold
-    color_map = dict(zip(methods_order, colors, strict=False))
-
-    x_indices = np.arange(len(sample_sizes))
-    plt.figure(figsize=(12, 6))
-
-    offset = 0.1
-    for i, method in enumerate(methods):
-        x_values = x_indices + (i - len(methods) / 2 + 0.5) * offset
-        mean_values = values[method]
-        std_values = [np.std(values[method])] * len(
-            sample_sizes
-        )  # Calculate standard deviation
-
-        # Use the corresponding color or a default color
-        color = color_map.get(method, "black")
-
-        plt.errorbar(
-            x_values,
-            mean_values,
-            yerr=std_values,
-            fmt="o",
-            capsize=5,
-            elinewidth=2,
-            markeredgewidth=2,
-            label=f"{method} {f'for seed {seed}' if seed is not None else ''}",
-            color=color,
-        )
-
-    plt.xlabel("Sample Size")
-    plt.ylabel(f"{metric_name} Value")
-    plt.title(f"{metric_name} for Different Sample Sizes")
-    # Legend on the right as in the reference image
-    plt.legend(loc="center left", fontsize=10, bbox_to_anchor=(1, 0.5))
-    plt.grid(True)
-    plt.xticks(x_indices, [*map(str, sample_sizes)])
-    plt.tight_layout()
-    plt.show(block=block)
 
 
 def plot_results_with_error_bars(
@@ -528,17 +465,6 @@ def benchmark():
         print("\nP-values:")
         pprint(p_values)
 
-        # Create individual plots for this iteration as before
-        # Display RMSE and Energy Distance non-blocking at each iteration
-        plot_results(rmse_values, "RMSE", config.sample_sizes, block=False, seed=seed)
-        plot_results(
-            ed_values, "Energy Distance", config.sample_sizes, block=False, seed=seed
-        )
-        # Do NOT display the P-Value plot for the last iteration (it will be displayed blocking after all prints)
-        if iteration < iterations - 1:
-            plot_results(
-                p_values, "P-Value", config.sample_sizes, block=False, seed=seed
-            )
 
     # Build per-method arrays of means/stds aligned with sample_sizes
     def build_mean_std_maps(
@@ -569,7 +495,7 @@ def benchmark():
         ed_means_map, ed_stds_map, "Energy Distance", config.sample_sizes, block=False
     )
     plot_aggregated_results_per_size(
-        p_means_map, p_stds_map, "P-Value", config.sample_sizes, block=False
+        p_means_map, p_stds_map, "P-Value", config.sample_sizes, block=True
     )
 
     # Calculate and display only the total execution time
@@ -592,21 +518,6 @@ def benchmark():
 
     print(f"Total execution time: {time_str}")
     print("=" * 60)
-
-    # Display the last blocking plot after all prints
-    if iterations > 0:
-        # Get results from the last iteration
-        last_iteration_key = (iterations - 1, base_seed + iterations - 1)
-        if last_iteration_key in results_per_iteration:
-            last_rmse, last_ed, last_p, _ = results_per_iteration[last_iteration_key]
-            # Only the last P-Value plot is blocking
-            plot_results(
-                last_p,
-                "P-Value",
-                config.sample_sizes,
-                block=True,
-                seed=base_seed + iterations - 1,
-            )
 
 
 def main():
