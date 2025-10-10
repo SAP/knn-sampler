@@ -84,6 +84,12 @@ poetry run task benchmark_knnsampler
 
 This project is open to feature requests and bug reports via [GitHub issues](https://github.com/SAP/knn-sampler/issues). Contributions and feedback are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
+### Install development dependencies
+
+```shell
+poetry install --no-root --with dev 
+```
+
 ### Code formatting
 
 ```shell
