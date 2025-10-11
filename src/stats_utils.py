@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Callable, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -15,20 +15,11 @@ def multivariate_energy_distance(
     unbiased: bool = True,
     chunk_threshold: int = 200_000_000,
 ) -> float:
-    """Compute (optionally unbiased) multivariate energy distance between two samples.
+    """Compute multivariate energy distance between two samples.
 
     The multivariate energy distance is a metric for comparing probability
-    distributions based on distances between sample points. The population
-    energy distance between distributions X and Y is:
-
-        ED(X, Y) = 2 E[||X - Y||] - E[||X - X'||] - E[||Y - Y'||]
-
-    where X, X' are independent copies from distribution X, and Y, Y' are
-    independent copies from distribution Y.
-
-    This function returns a sample estimate using Euclidean distances. By default,
-    it uses U-statistic estimators that exclude diagonal terms (i=j) to reduce
-    bias in finite samples.
+    distributions based on distances between sample points. Uses U-statistic
+    estimators by default to reduce finite-sample bias.
 
     Parameters
     ----------
@@ -38,60 +29,29 @@ def multivariate_energy_distance(
         Second sample with m observations and d features.
     unbiased : bool, default=True
         Whether to use unbiased U-statistic estimators for intra-sample distances.
-        If False, uses simple mean including diagonal zeros (faster but biased
-        downward for small samples).
     chunk_threshold : int, default=200_000_000
-        Memory management threshold. If n*m exceeds this value, cross-distances
-        are computed in chunks to reduce peak memory usage from O(nm) to O(chunk_size).
+        Approximate memory (in element * feature * 8 byte units) threshold used
+        to decide when to fall back to chunked/block computations.
 
     Returns
     -------
     float
-        Estimated energy distance. Always non-negative; equals 0 if and only if
-        both samples come from the same distribution (in population).
+        Estimated energy distance. Non-negative for independent samples; equals
+        0 in expectation when both samples come from the same distribution.
 
     Raises
     ------
     ValueError
-        If inputs are not 2D numeric arrays, have incompatible feature dimensions,
-        contain fewer than 2 observations each, or contain NaN/Inf values.
-
-    Notes
-    -----
-    **Computational Complexity:**
-    - Time: O(n²d + m²d + nmd) for distance computations
-    - Memory: O(min(nm, chunk_threshold)) with chunking enabled
-
-    **Statistical Properties:**
-    - The energy distance satisfies the triangle inequality and is zero if and
-      only if the distributions are identical
-    - U-statistic version (unbiased=True) provides better finite-sample properties
-    - For large samples, biased and unbiased versions converge to the same value
+        If inputs are invalid or contain non-finite values.
 
     Examples
     --------
     >>> import numpy as np
-    >>> # Two samples from different distributions
     >>> A = np.random.normal(0, 1, (100, 2))
     >>> B = np.random.normal(1, 1, (100, 2))
     >>> ed = multivariate_energy_distance(A, B)
-    >>> ed > 0  # Should be positive for different distributions
+    >>> ed > 0
     True
-
-    >>> # Same distribution should give distance near 0
-    >>> C = np.random.normal(0, 1, (100, 2))
-    >>> D = np.random.normal(0, 1, (100, 2))
-    >>> ed_same = multivariate_energy_distance(C, D)
-    >>> ed_same < ed  # Should be smaller
-    True
-
-    References
-    ----------
-    .. [1] Székely, G. J., & Rizzo, M. L. (2013). Energy statistics: A class of
-           statistics based on distances. Journal of Statistical Planning and
-           Inference, 143(8), 1249-1272.
-    .. [2] Rizzo, M. L., & Székely, G. J. (2016). Energy distance. Wiley
-           Interdisciplinary Reviews: Computational Statistics, 8(1), 27-38.
     """
     # Validation
     if not isinstance(Z_A, np.ndarray) or not isinstance(Z_B, np.ndarray):
@@ -108,30 +68,40 @@ def multivariate_energy_distance(
     n, m = Z_A.shape[0], Z_B.shape[0]
 
     # Cross mean distance (chunked if needed)
-    prod = n * m
-    if prod <= chunk_threshold:
+    n_features = Z_A.shape[1]
+    memory_needed = n * m * n_features * 8  # 8 bytes per float64
+    if memory_needed <= chunk_threshold:
         cross_dists = np.linalg.norm(Z_A[:, None, :] - Z_B[None, :, :], axis=-1)
         mean_cross_dists = cross_dists.mean()
     else:
-        # Stream over B in blocks
-        block_rows = max(1, chunk_threshold // n)
-        accum = 0.0
-        count = 0
-        for start in range(0, m, block_rows):
-            stop = min(m, start + block_rows)
+        # Stream over B in blocks to manage memory
+        max_elements_per_chunk = chunk_threshold // (n_features * 8)
+        chunk_size = max(1, max_elements_per_chunk // n)
+        chunk_size = min(chunk_size, m)  # Don't exceed B sample size
+
+        total_sum = 0.0
+        total_count = 0
+        for start in range(0, m, chunk_size):
+            stop = min(m, start + chunk_size)
             block = Z_B[start:stop]
             cross_block = np.linalg.norm(Z_A[:, None, :] - block[None, :, :], axis=-1)
-            accum += cross_block.sum()
-            count += cross_block.size
-        mean_cross_dists = accum / count
+            total_sum += cross_block.sum()
+            total_count += cross_block.size
+        mean_cross_dists = total_sum / total_count
 
     # Intra distances
     def compute_intra_mean(Z: np.ndarray, unbiased_flag: bool) -> float:
-        """Compute intra-sample mean distance with memory optimization."""
+        """Compute intra-sample mean distance with memory optimization.
+
+        For unbiased=True, computes U-statistic estimator excluding diagonal.
+        For unbiased=False, computes all pairwise distances including diagonal.
+        """
         n_samples = Z.shape[0]
+        n_features = Z.shape[1]
 
         # For small samples, use full matrix
-        if n_samples * n_samples <= chunk_threshold:
+        memory_needed = n_samples * n_samples * n_features * 8  # 8 bytes per float64
+        if memory_needed <= chunk_threshold:
             dists = np.linalg.norm(Z[:, None, :] - Z[None, :, :], axis=-1)
             if unbiased_flag and n_samples > 1:
                 # Exclude diagonal and use U-statistic
@@ -141,49 +111,60 @@ def multivariate_energy_distance(
                 return dists.mean()
 
         # For large samples, compute incrementally with proper blocking
-        total_sum = 0.0
-        total_count = 0
+        # Each block pair creates a (block_size x block_size x n_features) array
+        max_block_elements = chunk_threshold // (n_features * 8)  # 8 bytes per float64
+        block_size = max(1, int(np.sqrt(max_block_elements)))
+        block_size = min(block_size, n_samples)
 
-        # Calculate block size to stay within memory limits
-        block_size = max(1, int(np.sqrt(chunk_threshold // n_samples)))
+        total_sum = 0.0
+        total_pairs = 0
 
         for i in range(0, n_samples, block_size):
             i_end = min(i + block_size, n_samples)
             Z_i = Z[i:i_end]
+            actual_i_size = i_end - i
 
-            # Process blocks in upper triangular pattern to avoid double counting
-            for j in range(i, n_samples, block_size):
+            for j in range(0, n_samples, block_size):
                 j_end = min(j + block_size, n_samples)
                 Z_j = Z[j:j_end]
+                actual_j_size = j_end - j
 
                 # Compute distances between blocks
                 block_dists = np.linalg.norm(Z_i[:, None, :] - Z_j[None, :, :], axis=-1)
 
-                if i == j:
-                    # Diagonal block
-                    if unbiased_flag:
-                        # Only upper triangle (excluding diagonal)
-                        mask = np.triu(np.ones_like(block_dists, dtype=bool), k=1)
+                if unbiased_flag:
+                    if i == j:
+                        # Diagonal block - only upper triangle excluding diagonal
+                        mask = np.triu(
+                            np.ones((actual_i_size, actual_j_size), dtype=bool), k=1
+                        )
                         block_sum = block_dists[mask].sum()
-                        block_count = mask.sum()
-                    else:
-                        # All elements including diagonal
+                        block_pairs = mask.sum()
+                    elif i < j:
+                        # Upper triangular block - all elements
                         block_sum = block_dists.sum()
-                        block_count = block_dists.size
+                        block_pairs = actual_i_size * actual_j_size
+                    else:
+                        # Lower triangular block - skip to avoid double counting
+                        continue
                 else:
-                    # Off-diagonal block - all elements, counted once
+                    # All pairwise distances including diagonal
                     block_sum = block_dists.sum()
-                    block_count = block_dists.size
+                    block_pairs = actual_i_size * actual_j_size
 
                 total_sum += block_sum
-                total_count += block_count
+                total_pairs += block_pairs
 
         if unbiased_flag and n_samples > 1:
-            # For unbiased: we've summed upper triangle, but need mean of all i≠j pairs
-            # Upper triangle has n(n-1)/2 pairs, but we want mean over n(n-1) pairs
-            return (2.0 * total_sum) / (n_samples * (n_samples - 1))
+            # For unbiased: we've summed upper triangle pairs once (sum_{i<j} d_ij)
+            # Unbiased estimator uses (2 / (n(n-1))) * sum_{i<j} d_ij
+            return (
+                (2.0 * total_sum) / (n_samples * (n_samples - 1))
+                if total_pairs > 0
+                else 0.0
+            )
         else:
-            return total_sum / (n_samples * n_samples)
+            return total_sum / total_pairs if total_pairs > 0 else 0.0
 
     mean_intra_A = compute_intra_mean(Z_A, unbiased)
     mean_intra_B = compute_intra_mean(Z_B, unbiased)
@@ -201,80 +182,52 @@ def permutation_test(
     n_permutations: int,
     *,
     n_A: int | None = None,
+    metric_func: Callable[[np.ndarray, np.ndarray], float] | None = None,
     random_state: int | None = None,
     unbiased: bool = True,
     chunk_threshold: int = 200_000_000,
 ) -> list[float]:
     """Generate null distribution via label permutation for two-sample testing.
 
-    Implements the permutation test procedure for testing whether two samples
-    come from the same distribution. The method randomly reassigns group labels
-    to observations and computes a test statistic for each permutation, creating
-    a null distribution under the hypothesis of no difference between groups.
-
-    The current implementation uses multivariate energy distance as the test
-    statistic, but the permutation framework is general and applicable to other
-    two-sample statistics.
+    Randomly reassigns group labels to observations and computes test statistics
+    for each permutation, creating a null distribution under the hypothesis of
+    no difference between groups.
 
     Parameters
     ----------
     Z : DataFrame | np.ndarray, shape (n_total, d)
-        Concatenated observations from both groups, typically [Group_A; Group_B].
-        If DataFrame, only numeric columns are used.
+        Concatenated observations from both groups.
     n_permutations : int
         Number of random permutations for null distribution generation.
-        Common values: 999, 1999, 4999 (providing p-value precision of ~0.001, 0.0005, 0.0002).
     n_A : int | None, default=None
-        Size of first group in original partition. If None, uses floor(n_total/2).
-        Must be between 2 and n_total-2 to ensure meaningful group comparisons.
+        Size of first group. If None, uses floor(n_total/2).
+    metric_func : callable | None, default=None
+        Function to compute test statistic between two groups.
+        Should accept two arrays and return a float.
+        If None, uses multivariate_energy_distance.
     random_state : int | None, default=None
-        Seed for reproducible permutation generation. Recommended for research
-        and debugging purposes.
+        Seed for reproducible permutation generation.
     unbiased : bool, default=True
-        Passed to energy distance computation. Controls bias correction in
-        finite-sample distance estimation.
+        Passed to energy distance computation when metric_func is None.
     chunk_threshold : int, default=200_000_000
-        Memory management parameter passed to distance computation for handling
-        large datasets efficiently.
+        Memory management parameter for large datasets.
 
     Returns
     -------
     list[float]
         Null distribution of test statistics under permuted group labels.
-        Length equals n_permutations. Higher values indicate greater separation
-        between groups.
 
     Raises
     ------
     ValueError
-        If n_permutations < 1, inputs invalid, or group sizes inappropriate
-        for meaningful comparison.
-
-    Notes
-    -----
-    **Statistical Foundation:**
-    The permutation test relies on exchangeability: under the null hypothesis
-    that both groups come from the same distribution, any reassignment of
-    observations to groups is equally likely.
-
-    **Recommended Usage:**
-    - Use >= 999 permutations for p-values in scientific contexts
-    - Set random_state for reproducible results
-    - Ensure balanced group sizes when possible for optimal power
-
-    **Computational Complexity:**
-    - Time: O(n_permutations x [n²d + m²d]) where n,m are group sizes
-    - Memory: O(n_total x d) for data storage plus distance computation overhead
+        If inputs are invalid or group sizes inappropriate.
 
     Examples
     --------
     >>> import pandas as pd
-    >>> # Create test data
     >>> A = np.random.normal(0, 1, (50, 2))
     >>> B = np.random.normal(1, 1, (50, 2))
     >>> Z = pd.DataFrame(np.vstack([A, B]), columns=['X', 'Y'])
-    >>>
-    >>> # Generate null distribution
     >>> null_dist = permutation_test(Z, n_permutations=999, n_A=50, random_state=42)
     >>> len(null_dist)
     999
@@ -308,12 +261,15 @@ def permutation_test(
         rng.shuffle(idx)
         A_idx = idx[:n_A]
         B_idx = idx[n_A:]
-        dist = multivariate_energy_distance(
-            Z_arr[A_idx],
-            Z_arr[B_idx],
-            unbiased=unbiased,
-            chunk_threshold=chunk_threshold,
-        )
+        if metric_func is None:
+            dist = multivariate_energy_distance(
+                Z_arr[A_idx],
+                Z_arr[B_idx],
+                unbiased=unbiased,
+                chunk_threshold=chunk_threshold,
+            )
+        else:
+            dist = metric_func(Z_arr[A_idx], Z_arr[B_idx])
         out.append(dist)
     return out
 
@@ -324,73 +280,43 @@ def calculate_p_value(
     *,
     smooth: bool = True,
 ) -> float:
-    """Compute permutation p-value from null distribution and observed statistic.
+    """Compute one-tailed permutation p-value from null distribution.
 
-    Calculates the probability of observing a test statistic at least as extreme
-    as the observed value, assuming the null hypothesis is true. Optionally applies
-    smoothing to avoid zero p-values which can be problematic for multiple testing
-    corrections and reporting.
+    Calculates the probability of observing a test statistic greater than or equal
+    to the observed value under the null hypothesis (right-tailed test). Applies
+    smoothing by default to avoid zero p-values.
 
     Parameters
     ----------
     null_stats : sequence of float
-        Test statistics sampled under the null hypothesis (e.g., from permutation_test).
-        Should contain at least 99 values for meaningful p-value estimation.
+        Test statistics sampled under the null hypothesis.
     observed_stat : float
-        The empirically observed test statistic to compare against the null distribution.
+        Observed test statistic to compare against null distribution.
     smooth : bool, default=True
-        Whether to apply +1 smoothing to numerator and denominator. This prevents
-        zero p-values and provides more conservative inference, as recommended by
-        Phipson & Smyth (2010) for permutation tests.
+        Whether to apply +1 smoothing to prevent zero p-values.
 
     Returns
     -------
     float
-        P-value in [0, 1]. With smoothing: minimum possible value is 1/(N+1) where
-        N is len(null_stats). Without smoothing: minimum is 0.
+        One-tailed p-value in [0, 1]. Tests H0: groups are identical vs
+        H1: observed statistic indicates greater separation than expected by chance.
 
     Raises
     ------
     ValueError
-        If null_stats is empty or contains non-finite values (NaN, ±Inf).
+        If null_stats is empty or contains non-finite values.
 
     Notes
     -----
-    **Statistical Interpretation:**
-    - p < 0.05: Strong evidence against null hypothesis (conventional threshold)
-    - p < 0.01: Very strong evidence against null hypothesis
-    - p ≥ 0.05: Insufficient evidence to reject null hypothesis
-
-    **Smoothing Rationale:**
-    The +1 smoothing (smooth=True) is recommended practice because:
-    - Prevents p-value of exactly 0, which is theoretically impossible
-    - Provides more conservative inference
-    - Better behaves under multiple testing corrections (FDR, Bonferroni)
-    - Accounts for finite-sample uncertainty in permutation tests
-
-    **Right-tailed Test:**
-    Currently implements one-sided test (observed ≥ null). For two-sided tests,
-    consider doubling the p-value or using absolute values of statistics.
+    For two-tailed tests, multiply result by 2 or use absolute values of statistics.
 
     Examples
     --------
-    >>> # Simulate null distribution and observed statistic
     >>> null_dist = [0.5, 0.8, 0.3, 0.9, 0.6, 0.4, 0.7, 0.2, 0.1, 0.85]
     >>> observed = 0.95
-    >>>
-    >>> # Calculate p-value with smoothing
-    >>> p_smooth = calculate_p_value(null_dist, observed, smooth=True)
-    >>> # p_smooth = (0 + 1) / (10 + 1) = 0.091
-    >>>
-    >>> # Calculate without smoothing
-    >>> p_raw = calculate_p_value(null_dist, observed, smooth=False)
-    >>> # p_raw = 0 / 10 = 0.0
-
-    References
-    ----------
-    .. [1] Phipson, B., & Smyth, G. K. (2010). Permutation P-values should never
-           be zero: calculating exact P-values when permutations are randomly drawn.
-           Statistical Applications in Genetics and Molecular Biology, 9(1).
+    >>> p_value = calculate_p_value(null_dist, observed)
+    >>> p_value  # (0 + 1) / (10 + 1)
+    0.09090909090909091
     """
     if len(null_stats) == 0:
         raise ValueError("null_stats must not be empty")
