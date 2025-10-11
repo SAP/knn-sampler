@@ -183,7 +183,7 @@ def multivariate_energy_distance(
             # Upper triangle has n(n-1)/2 pairs, but we want mean over n(n-1) pairs
             return (2.0 * total_sum) / (n_samples * (n_samples - 1))
         else:
-            return total_sum / (n_samples * n_samples) if total_count > 0 else 0.0
+            return total_sum / (n_samples * n_samples)
 
     mean_intra_A = compute_intra_mean(Z_A, unbiased)
     mean_intra_B = compute_intra_mean(Z_B, unbiased)
