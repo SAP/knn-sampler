@@ -13,7 +13,7 @@ from src.imputation.imputer import BoundsPerPercentile
 ImputationStrategy = Literal["sample", "mean", "median"]
 KNNAlgorithm = Literal["auto", "ball_tree", "kd_tree", "brute"]
 ScalingStrategy = Literal["none", "standardization", "normalization"]
-KOptimalMethod = Literal["heuristic", "cv"]
+KOptimalMethod = Literal["loo_heuristic", "kfold_cv"]
 KNNWeights = Literal["uniform", "distance"]
 
 
@@ -68,8 +68,8 @@ class KnnSampler(UncertaintyImputer):
         KNN search algorithm.
     weights : {'uniform', 'distance'}
         Neighbor weighting strategy.
-    optimal_k_method : {'heuristic', 'cv'}
-        Method for k selection when n_neighbors is None.
+    optimal_k_method : {'loo_heuristic', 'kfold_cv'}
+         Method for k selection when n_neighbors is None.
     optimal_k_random_state : int | None
         Seed for K-Fold cross-validation during k selection.
     optimal_k_cv_folds : int
@@ -97,7 +97,7 @@ class KnnSampler(UncertaintyImputer):
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
-        optimal_k_method: KOptimalMethod = "heuristic",
+        optimal_k_method: KOptimalMethod = "loo_heuristic",
         optimal_k_random_state: Optional[int] = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
@@ -115,7 +115,7 @@ class KnnSampler(UncertaintyImputer):
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
-        optimal_k_method: KOptimalMethod = "heuristic",
+        optimal_k_method: KOptimalMethod = "loo_heuristic",
         optimal_k_random_state: Optional[int] = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
@@ -132,7 +132,7 @@ class KnnSampler(UncertaintyImputer):
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
-        optimal_k_method: KOptimalMethod = "heuristic",
+        optimal_k_method: KOptimalMethod = "loo_heuristic",
         optimal_k_random_state: Optional[int] = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
@@ -145,7 +145,6 @@ class KnnSampler(UncertaintyImputer):
         if n_neighbors is not None and n_neighbors < 1:
             raise ValueError("n_neighbors must be >= 1")
 
-        # Use centralized validator for Literal-like parameter checks
         _validate_option("strategy", strategy, ("sample", "mean", "median"))
         _validate_option(
             "algorithm", algorithm, ("auto", "ball_tree", "kd_tree", "brute")
@@ -155,7 +154,9 @@ class KnnSampler(UncertaintyImputer):
             ("scaling_fit", scaling_fit),
         ):
             _validate_option(label, value, ("none", "standardization", "normalization"))
-        _validate_option("optimal_k_method", optimal_k_method, ("heuristic", "cv"))
+        _validate_option(
+            "optimal_k_method", optimal_k_method, ("loo_heuristic", "kfold_cv")
+        )
         _validate_option("weights", weights, ("uniform", "distance"))
         if optimal_k_cv_folds < 2:
             raise ValueError("optimal_k_cv_folds must be >= 2")
@@ -273,7 +274,7 @@ class KnnSampler(UncertaintyImputer):
     def _get_k_bounds(self, n_samples: int) -> tuple[int, int]:
         """Calculate reasonable bounds for k selection.
 
-        Uses heuristic combining sqrt(n) and n/2, capped at 50, never exceeding n-1.
+        Uses heuristic combining sqrt(n) and n/2, capped at 50, never exceeding n_samples-1.
         For very small datasets (n <= 2), returns (1,1).
 
         Parameters
@@ -293,7 +294,7 @@ class KnnSampler(UncertaintyImputer):
         sqrt_part = int(np.sqrt(n_samples))
         half_part = n_samples // 2  # grows faster, but will be capped
         max_k = max(5, sqrt_part, min(50, half_part))
-        # Never exceed n-1 (must have at least one other sample in neighborhood)
+        # Never exceed n_samples-1 (must have at least one other sample in neighborhood)
         max_k = min(max_k, n_samples - 1)
         if max_k < min_k:
             max_k = min_k
@@ -328,10 +329,10 @@ class KnnSampler(UncertaintyImputer):
             n_neighbors=max_k + 1, algorithm=self.algorithm, weights=self.weights
         )
         knn.fit(x_scaled, y_train)
-        distances_full, indices_full = knn.kneighbors(x_scaled, return_distance=True)
+        distances, indices = knn.kneighbors(x_scaled, return_distance=True)
 
         # Identify and remove self-index per row
-        self_mask = indices_full == np.arange(n)[:, None]
+        self_mask = indices == np.arange(n)[:, None]
         # Safety: if a row has no self (rare), fallback to dropping first neighbor
         if not np.all(np.sum(self_mask, axis=1) == 1):
             # Fallback: assume first column is self if missing
@@ -341,8 +342,8 @@ class KnnSampler(UncertaintyImputer):
                 np.sum(self_mask, axis=1, keepdims=True) == 1, self_mask, enforced_mask
             )
         keep_mask = ~self_mask
-        distances_excl = distances_full[keep_mask].reshape(n, max_k)
-        indices_excl = indices_full[keep_mask].reshape(n, max_k)
+        distances_excl = distances[keep_mask].reshape(n, max_k)
+        indices_excl = indices[keep_mask].reshape(n, max_k)
 
         y_array = y_train.to_numpy()
         neighbor_targets = y_array[indices_excl]  # shape (n, max_k)
@@ -469,7 +470,7 @@ class KnnSampler(UncertaintyImputer):
         """
         nona_sets = self.ml_data.nona_sets()
         if self.optimal_k is None:
-            if self.optimal_k_method == "cv":
+            if self.optimal_k_method == "kfold_cv":
                 self.optimal_k = self.find_optimal_k_kfold(nona_sets)
             else:
                 self.optimal_k = self.find_optimal_k(nona_sets)
