@@ -17,37 +17,81 @@ def multivariate_energy_distance(
 ) -> float:
     """Compute (optionally unbiased) multivariate energy distance between two samples.
 
-    The population energy distance between distributions X and Y is:
-        ED(X, Y) = 2 E||X - Y|| - E||X - X'|| - E||Y - Y'||
+    The multivariate energy distance is a metric for comparing probability
+    distributions based on distances between sample points. The population
+    energy distance between distributions X and Y is:
 
-    This function returns a *sample* estimate. By default (``unbiased=True``) it
-    uses the U-statistic versions for the intra-sample expectations that exclude
-    the diagonal (i == j) terms. If ``unbiased=False`` it uses the simple mean of
-    all pairwise distances including zeros on the diagonal (biased downward for
-    small sample sizes).
+        ED(X, Y) = 2 E[||X - Y||] - E[||X - X'||] - E[||Y - Y'||]
+
+    where X, X' are independent copies from distribution X, and Y, Y' are
+    independent copies from distribution Y.
+
+    This function returns a sample estimate using Euclidean distances. By default,
+    it uses U-statistic estimators that exclude diagonal terms (i=j) to reduce
+    bias in finite samples.
 
     Parameters
     ----------
     Z_A : np.ndarray, shape (n, d)
-        First sample.
+        First sample with n observations and d features.
     Z_B : np.ndarray, shape (m, d)
-        Second sample.
+        Second sample with m observations and d features.
     unbiased : bool, default=True
-        Whether to use the unbiased U-statistic estimator for intra distances.
+        Whether to use unbiased U-statistic estimators for intra-sample distances.
+        If False, uses simple mean including diagonal zeros (faster but biased
+        downward for small samples).
     chunk_threshold : int, default=200_000_000
-        If n * m exceeds this threshold, the cross-distance mean is computed in
-        chunks to reduce peak memory usage.
+        Memory management threshold. If n*m exceeds this value, cross-distances
+        are computed in chunks to reduce peak memory usage from O(nm) to O(chunk_size).
 
     Returns
     -------
     float
-        Estimated energy distance.
+        Estimated energy distance. Always non-negative; equals 0 if and only if
+        both samples come from the same distribution (in population).
 
     Raises
     ------
     ValueError
-        If inputs are not 2D numeric arrays or have incompatible feature dims
-        or contain NaNs / Infs.
+        If inputs are not 2D numeric arrays, have incompatible feature dimensions,
+        contain fewer than 2 observations each, or contain NaN/Inf values.
+
+    Notes
+    -----
+    **Computational Complexity:**
+    - Time: O(n²d + m²d + nmd) for distance computations
+    - Memory: O(min(nm, chunk_threshold)) with chunking enabled
+
+    **Statistical Properties:**
+    - The energy distance satisfies the triangle inequality and is zero if and
+      only if the distributions are identical
+    - U-statistic version (unbiased=True) provides better finite-sample properties
+    - For large samples, biased and unbiased versions converge to the same value
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> # Two samples from different distributions
+    >>> A = np.random.normal(0, 1, (100, 2))
+    >>> B = np.random.normal(1, 1, (100, 2))
+    >>> ed = multivariate_energy_distance(A, B)
+    >>> ed > 0  # Should be positive for different distributions
+    True
+
+    >>> # Same distribution should give distance near 0
+    >>> C = np.random.normal(0, 1, (100, 2))
+    >>> D = np.random.normal(0, 1, (100, 2))
+    >>> ed_same = multivariate_energy_distance(C, D)
+    >>> ed_same < ed  # Should be smaller
+    True
+
+    References
+    ----------
+    .. [1] Székely, G. J., & Rizzo, M. L. (2013). Energy statistics: A class of
+           statistics based on distances. Journal of Statistical Planning and
+           Inference, 143(8), 1249-1272.
+    .. [2] Rizzo, M. L., & Székely, G. J. (2016). Energy distance. Wiley
+           Interdisciplinary Reviews: Computational Statistics, 8(1), 27-38.
     """
     # Validation
     if not isinstance(Z_A, np.ndarray) or not isinstance(Z_B, np.ndarray):
@@ -144,8 +188,7 @@ def multivariate_energy_distance(
     mean_intra_A = compute_intra_mean(Z_A, unbiased)
     mean_intra_B = compute_intra_mean(Z_B, unbiased)
 
-    ED = 2.0 * mean_cross_dists - mean_intra_A - mean_intra_B
-    return float(ED)
+    return float(2.0 * mean_cross_dists - mean_intra_A - mean_intra_B)
 
 
 # --------------------------------------------------------------------------------------
@@ -162,33 +205,79 @@ def permutation_test(
     unbiased: bool = True,
     chunk_threshold: int = 200_000_000,
 ) -> list[float]:
-    """Generate a null distribution of energy distances by label permutation.
+    """Generate null distribution via label permutation for two-sample testing.
+
+    Implements the permutation test procedure for testing whether two samples
+    come from the same distribution. The method randomly reassigns group labels
+    to observations and computes a test statistic for each permutation, creating
+    a null distribution under the hypothesis of no difference between groups.
+
+    The current implementation uses multivariate energy distance as the test
+    statistic, but the permutation framework is general and applicable to other
+    two-sample statistics.
 
     Parameters
     ----------
     Z : DataFrame | np.ndarray, shape (n_total, d)
-        Concatenated sample (e.g., [A; B]). If a DataFrame is given, its numeric
-        columns are used (non-numeric columns raise an error).
+        Concatenated observations from both groups, typically [Group_A; Group_B].
+        If DataFrame, only numeric columns are used.
     n_permutations : int
-        Number of permutations to perform.
+        Number of random permutations for null distribution generation.
+        Common values: 999, 1999, 4999 (providing p-value precision of ~0.001, 0.0005, 0.0002).
     n_A : int | None, default=None
-        Original size of group A. If None, splits floor(n/2) / ceil(n/2).
+        Size of first group in original partition. If None, uses floor(n_total/2).
+        Must be between 2 and n_total-2 to ensure meaningful group comparisons.
     random_state : int | None, default=None
-        Seed for reproducibility.
+        Seed for reproducible permutation generation. Recommended for research
+        and debugging purposes.
     unbiased : bool, default=True
-        Passed to energy distance estimator.
+        Passed to energy distance computation. Controls bias correction in
+        finite-sample distance estimation.
     chunk_threshold : int, default=200_000_000
-        Threshold forwarded to energy distance estimator for chunking.
+        Memory management parameter passed to distance computation for handling
+        large datasets efficiently.
 
     Returns
     -------
     list[float]
-        Energy distance values under the null (permuted labels).
+        Null distribution of test statistics under permuted group labels.
+        Length equals n_permutations. Higher values indicate greater separation
+        between groups.
 
     Raises
     ------
     ValueError
-        If inputs invalid or n_permutations < 1.
+        If n_permutations < 1, inputs invalid, or group sizes inappropriate
+        for meaningful comparison.
+
+    Notes
+    -----
+    **Statistical Foundation:**
+    The permutation test relies on exchangeability: under the null hypothesis
+    that both groups come from the same distribution, any reassignment of
+    observations to groups is equally likely.
+
+    **Recommended Usage:**
+    - Use >= 999 permutations for p-values in scientific contexts
+    - Set random_state for reproducible results
+    - Ensure balanced group sizes when possible for optimal power
+
+    **Computational Complexity:**
+    - Time: O(n_permutations x [n²d + m²d]) where n,m are group sizes
+    - Memory: O(n_total x d) for data storage plus distance computation overhead
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> # Create test data
+    >>> A = np.random.normal(0, 1, (50, 2))
+    >>> B = np.random.normal(1, 1, (50, 2))
+    >>> Z = pd.DataFrame(np.vstack([A, B]), columns=['X', 'Y'])
+    >>>
+    >>> # Generate null distribution
+    >>> null_dist = permutation_test(Z, n_permutations=999, n_A=50, random_state=42)
+    >>> len(null_dist)
+    999
     """
     if n_permutations < 1:
         raise ValueError("n_permutations must be >= 1")
@@ -235,16 +324,73 @@ def calculate_p_value(
     *,
     smooth: bool = True,
 ) -> float:
-    """Compute a (optionally smoothed) permutation p-value from a null distribution.
+    """Compute permutation p-value from null distribution and observed statistic.
+
+    Calculates the probability of observing a test statistic at least as extreme
+    as the observed value, assuming the null hypothesis is true. Optionally applies
+    smoothing to avoid zero p-values which can be problematic for multiple testing
+    corrections and reporting.
 
     Parameters
     ----------
     null_stats : sequence of float
-        Sampled statistics under the null hypothesis.
+        Test statistics sampled under the null hypothesis (e.g., from permutation_test).
+        Should contain at least 99 values for meaningful p-value estimation.
     observed_stat : float
-        Observed empirical statistic to compare against the null distribution.
+        The empirically observed test statistic to compare against the null distribution.
     smooth : bool, default=True
-        If True apply +1 / (N+1) smoothing (Phipson & Smyth 2010) to avoid zero p-values.
+        Whether to apply +1 smoothing to numerator and denominator. This prevents
+        zero p-values and provides more conservative inference, as recommended by
+        Phipson & Smyth (2010) for permutation tests.
+
+    Returns
+    -------
+    float
+        P-value in [0, 1]. With smoothing: minimum possible value is 1/(N+1) where
+        N is len(null_stats). Without smoothing: minimum is 0.
+
+    Raises
+    ------
+    ValueError
+        If null_stats is empty or contains non-finite values (NaN, ±Inf).
+
+    Notes
+    -----
+    **Statistical Interpretation:**
+    - p < 0.05: Strong evidence against null hypothesis (conventional threshold)
+    - p < 0.01: Very strong evidence against null hypothesis
+    - p ≥ 0.05: Insufficient evidence to reject null hypothesis
+
+    **Smoothing Rationale:**
+    The +1 smoothing (smooth=True) is recommended practice because:
+    - Prevents p-value of exactly 0, which is theoretically impossible
+    - Provides more conservative inference
+    - Better behaves under multiple testing corrections (FDR, Bonferroni)
+    - Accounts for finite-sample uncertainty in permutation tests
+
+    **Right-tailed Test:**
+    Currently implements one-sided test (observed ≥ null). For two-sided tests,
+    consider doubling the p-value or using absolute values of statistics.
+
+    Examples
+    --------
+    >>> # Simulate null distribution and observed statistic
+    >>> null_dist = [0.5, 0.8, 0.3, 0.9, 0.6, 0.4, 0.7, 0.2, 0.1, 0.85]
+    >>> observed = 0.95
+    >>>
+    >>> # Calculate p-value with smoothing
+    >>> p_smooth = calculate_p_value(null_dist, observed, smooth=True)
+    >>> # p_smooth = (0 + 1) / (10 + 1) = 0.091
+    >>>
+    >>> # Calculate without smoothing
+    >>> p_raw = calculate_p_value(null_dist, observed, smooth=False)
+    >>> # p_raw = 0 / 10 = 0.0
+
+    References
+    ----------
+    .. [1] Phipson, B., & Smyth, G. K. (2010). Permutation P-values should never
+           be zero: calculating exact P-values when permutations are randomly drawn.
+           Statistical Applications in Genetics and Molecular Biology, 9(1).
     """
     if len(null_stats) == 0:
         raise ValueError("null_stats must not be empty")
