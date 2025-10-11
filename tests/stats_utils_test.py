@@ -10,12 +10,6 @@ from src.stats_utils import (
 
 
 class TestStatsUtils(unittest.TestCase):
-    """Unit tests for stats utilities following repository test conventions.
-
-    Tests cover symmetry, chunked vs full computation, unbiased vs biased
-    behavior, input validation, permutation reproducibility and p-value logic.
-    """
-
     def test_energy_distance_zero_identical(self):
         rng = np.random.default_rng(0)
         A = rng.normal(size=(20, 3))
