@@ -17,6 +17,32 @@ KOptimalMethod = Literal["heuristic", "cv"]
 KNNWeights = Literal["uniform", "distance"]
 
 
+def _validate_option(name: str, value, allowed: tuple[str, ...]) -> None:
+    """Validate that `value` is one of `allowed` and raise ValueError with
+    a consistent message if not.
+
+    This centralizes Literal-like runtime checks and keeps error messages
+    homogeneous across the module.
+
+    Parameters
+    ----------
+    name : str
+        Name of the parameter being validated, used in error messages.
+    value : Any
+        The value to validate against allowed options.
+    allowed : tuple[str, ...]
+        Tuple of allowed string values.
+
+    Raises
+    ------
+    ValueError
+        If `value` is not in `allowed` tuple.
+    """
+    if value not in allowed:
+        allowed_str = ",".join(f"'{a}'" for a in allowed)
+        raise ValueError(f"{name} must be one of: {allowed_str}")
+
+
 class KnnSampler(UncertaintyImputer):
     """k-NN sampler for missing target value imputation.
 
@@ -118,24 +144,19 @@ class KnnSampler(UncertaintyImputer):
 
         if n_neighbors is not None and n_neighbors < 1:
             raise ValueError("n_neighbors must be >= 1")
-        if strategy not in ("sample", "mean", "median"):
-            raise ValueError("strategy must be one of: 'sample', 'mean', 'median'")
-        if algorithm not in ("auto", "ball_tree", "kd_tree", "brute"):
-            raise ValueError(
-                "algorithm must be one of: 'auto','ball_tree','kd_tree','brute'"
-            )
+
+        # Use centralized validator for Literal-like parameter checks
+        _validate_option("strategy", strategy, ("sample", "mean", "median"))
+        _validate_option(
+            "algorithm", algorithm, ("auto", "ball_tree", "kd_tree", "brute")
+        )
         for label, value in (
             ("scaling_optimal_k", scaling_optimal_k),
             ("scaling_fit", scaling_fit),
         ):
-            if value not in ("none", "standardization", "normalization"):
-                raise ValueError(
-                    f"{label} must be one of: 'none','standardization','normalization'"
-                )
-        if optimal_k_method not in ("heuristic", "cv"):
-            raise ValueError("optimal_k_method must be one of: 'heuristic','cv'")
-        if weights not in ("uniform", "distance"):
-            raise ValueError("weights must be one of: 'uniform','distance'")
+            _validate_option(label, value, ("none", "standardization", "normalization"))
+        _validate_option("optimal_k_method", optimal_k_method, ("heuristic", "cv"))
+        _validate_option("weights", weights, ("uniform", "distance"))
         if optimal_k_cv_folds < 2:
             raise ValueError("optimal_k_cv_folds must be >= 2")
 
@@ -159,6 +180,14 @@ class KnnSampler(UncertaintyImputer):
         self._rng: np.random.Generator | None = None
 
     def _init_rng(self, random_state: Optional[int] = None) -> None:
+        """Initialize random number generator for sampling strategy.
+
+        Parameters
+        ----------
+        random_state : int, optional
+            Seed for reproducible random number generation. Only used when
+            strategy is 'sample'.
+        """
         if self.strategy == "sample":
             seed = random_state if isinstance(random_state, int) else None
             self._rng = np.random.default_rng(seed)
@@ -166,14 +195,40 @@ class KnnSampler(UncertaintyImputer):
             self._rng = None
 
     def _optimal_k_scaling(self, X: pd.DataFrame) -> np.ndarray:
-        """Return transformed X for k selection."""
+        """Apply scaling transformation for k selection phase.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Input features to transform.
+
+        Returns
+        -------
+        np.ndarray
+            Scaled feature matrix according to scaling_optimal_k strategy.
+        """
         if self.scaling_optimal_k == "standardization":
             return StandardScaler().fit_transform(X)
         if self.scaling_optimal_k == "normalization":
             return MinMaxScaler().fit_transform(X)
         return X.to_numpy()
 
-    def _fit_scaler(self, X: pd.DataFrame):
+    def _fit_scaler(self, X: pd.DataFrame) -> None:
+        """Fit scaling transformation for final imputation phase.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Training features to fit the scaler on.
+
+        Raises
+        ------
+        ValueError
+            If X is an empty DataFrame.
+        """
+        if X.empty:
+            raise ValueError("Cannot fit scaler on empty DataFrame")
+
         if self.scaling_fit == "standardization":
             self.scaler = StandardScaler().fit(X)
         elif self.scaling_fit == "normalization":
@@ -182,45 +237,189 @@ class KnnSampler(UncertaintyImputer):
             self.scaler = None
 
     def _transform(self, X: pd.DataFrame) -> np.ndarray:
+        """Transform features using fitted scaler.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Features to transform.
+
+        Returns
+        -------
+        np.ndarray
+            Transformed feature matrix, or original array if no scaling.
+        """
         if self.scaler is None:
             return X.to_numpy()
         return self.scaler.transform(X)
 
     def _calculate_mse(self, y_true: pd.Series, y_pred: np.ndarray) -> float:
-        """Calculate mean squared error between true and predicted values."""
-        return np.mean((y_true - y_pred) ** 2)
+        """Calculate mean squared error between true and predicted values.
+
+        Parameters
+        ----------
+        y_true : pd.Series
+            Ground truth target values.
+        y_pred : np.ndarray
+            Predicted target values.
+
+        Returns
+        -------
+        float
+            Mean squared error.
+        """
+        return float(np.mean((y_true - y_pred) ** 2))
+
+    def _get_k_bounds(self, n_samples: int) -> tuple[int, int]:
+        """Calculate reasonable bounds for k selection.
+
+        Uses heuristic combining sqrt(n) and n/2, capped at 50, never exceeding n-1.
+        For very small datasets (n <= 2), returns (1,1).
+
+        Parameters
+        ----------
+        n_samples : int
+            Number of training samples.
+
+        Returns
+        -------
+        tuple[int, int]
+            (min_k, max_k) bounds for k selection.
+        """
+        if n_samples <= 2:
+            return 1, 1
+        min_k = 1
+        # Candidates
+        sqrt_part = int(np.sqrt(n_samples))
+        half_part = n_samples // 2  # grows faster, but will be capped
+        max_k = max(5, sqrt_part, min(50, half_part))
+        # Never exceed n-1 (must have at least one other sample in neighborhood)
+        max_k = min(max_k, n_samples - 1)
+        if max_k < min_k:
+            max_k = min_k
+        return min_k, max_k
 
     def find_optimal_k(self, train_sets: MLSets) -> int:
+        """Select optimal k by minimizing leave-one-out based penalized MSE.
+
+        For each candidate k, predictions are formed using k nearest neighbors
+        (excluding self). MSE is penalized by ((k+1)²/k²) factor. Returns k
+        with lowest penalized MSE.
+
+        Parameters
+        ----------
+        train_sets : MLSets
+            Training data (features and target) without missing target values.
+
+        Returns
+        -------
+        int
+            Optimal number of neighbors (>= 1).
+        """
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
         n = len(x_train)
-        max_k = min(int(np.sqrt(n)), n - 1)
-        if max_k <= 1:
-            return 1
-        k_values: list[int] = list(range(1, max_k + 1))
-        scores: list[float] = []
-        for k in k_values:
-            regressor = KNeighborsRegressor(
-                n_neighbors=k, algorithm=self.algorithm, weights=self.weights
+        min_k, max_k = self._get_k_bounds(n)
+        if max_k <= min_k:
+            return min_k
+
+        # Fit one KNN model including self with max_k + 1 to extract neighbor structure
+        knn = KNeighborsRegressor(
+            n_neighbors=max_k + 1, algorithm=self.algorithm, weights=self.weights
+        )
+        knn.fit(x_scaled, y_train)
+        distances_full, indices_full = knn.kneighbors(x_scaled, return_distance=True)
+
+        # Identify and remove self-index per row
+        self_mask = indices_full == np.arange(n)[:, None]
+        # Safety: if a row has no self (rare), fallback to dropping first neighbor
+        if not np.all(np.sum(self_mask, axis=1) == 1):
+            # Fallback: assume first column is self if missing
+            enforced_mask = np.zeros_like(self_mask, dtype=bool)
+            enforced_mask[np.arange(n), 0] = True
+            self_mask = np.where(
+                np.sum(self_mask, axis=1, keepdims=True) == 1, self_mask, enforced_mask
             )
-            regressor.fit(x_scaled, y_train)
-            y_pred = regressor.predict(x_scaled)
-            mse = self._calculate_mse(y_train, y_pred)
-            adjusted_score = mse * ((k + 1) ** 2 / (k**2))
-            scores.append(adjusted_score)
+        keep_mask = ~self_mask
+        distances_excl = distances_full[keep_mask].reshape(n, max_k)
+        indices_excl = indices_full[keep_mask].reshape(n, max_k)
+
+        y_array = y_train.to_numpy()
+        neighbor_targets = y_array[indices_excl]  # shape (n, max_k)
+
+        k_values = list(range(min_k, max_k + 1))
+        scores: list[float] = []
+
+        if self.weights == "uniform":
+            # Precompute cumulative sums for O(1) mean retrieval per k
+            cumsum_targets = np.cumsum(neighbor_targets, axis=1)
+            for k in k_values:
+                preds = cumsum_targets[:, k - 1] / k
+                mse = self._calculate_mse(y_train, preds)
+                adjusted_score = mse * ((k + 1) ** 2 / (k**2))
+                scores.append(adjusted_score)
+        else:  # distance weighting
+            # For each k slice distances & targets then compute inverse-distance weighted average
+            for k in k_values:
+                d_k = distances_excl[:, :k]
+                t_k = neighbor_targets[:, :k]
+                # Zero distance handling: if any zero distance in a row, average only zero-distance targets
+                zero_mask_array = np.asarray(d_k == 0.0)
+                any_zero = np.any(zero_mask_array, axis=1)
+                preds = np.empty(n, dtype=float)
+
+                # Process each row individually for robustness
+                for i in range(n):
+                    if any_zero[i]:
+                        # Row has zero-distance neighbors: average only zero-distance targets
+                        row_zero_mask = zero_mask_array[i, :]
+                        row_targets = t_k[i, :]
+                        zero_targets = row_targets[row_zero_mask]
+                        preds[i] = float(np.mean(zero_targets))
+                    else:
+                        # Row has no zero-distance neighbors: use inverse distance weights
+                        row_distances = d_k[i, :]
+                        row_targets = t_k[i, :]
+                        weights_array = 1.0 / (row_distances + 1e-12)
+                        numerator = float(np.sum(weights_array * row_targets))
+                        denominator = float(np.sum(weights_array))
+                        preds[i] = numerator / denominator
+
+                mse = self._calculate_mse(y_train, preds)
+                adjusted_score = mse * ((k + 1) ** 2 / (k**2))
+                scores.append(adjusted_score)
+
+        if not scores or all(np.isinf(scores)):
+            return min_k
         return k_values[np.argmin(scores)]
 
     def find_optimal_k_kfold(self, train_sets: MLSets) -> int:
-        """K-fold cross-validation for optimal k selection."""
+        """Find optimal k using K-fold cross-validation.
+
+        Parameters
+        ----------
+        train_sets : MLSets
+            Training data containing input features and target values.
+
+        Returns
+        -------
+        int
+            Optimal number of neighbors (k >= 1) based on CV MSE.
+        """
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
         n = len(x_train)
-        max_k = min(int(np.sqrt(n)), n - 1)
 
-        if max_k <= 1:
-            return 1
+        min_k, max_k = self._get_k_bounds(n)
+        if max_k <= min_k:
+            return min_k
 
-        k_values = list(range(1, max_k + 1))
+        # Ensure we have enough samples for k-fold CV
+        if n < self.optimal_k_cv_folds:
+            # Fall back to leave-one-out if not enough samples for k-fold
+            return self.find_optimal_k(train_sets)
+
+        k_values = list(range(min_k, max_k + 1))
         cv_scores = []
 
         for k in k_values:
@@ -232,6 +431,11 @@ class KnnSampler(UncertaintyImputer):
             )
 
             for train_idx, test_idx in kfold.split(x_scaled):
+                # Skip if training fold doesn't have enough samples for k neighbors
+                if len(train_idx) < k:
+                    fold_scores.append(np.inf)
+                    continue
+
                 knn = KNeighborsRegressor(
                     n_neighbors=k, algorithm=self.algorithm, weights=self.weights
                 )
@@ -240,11 +444,29 @@ class KnnSampler(UncertaintyImputer):
                 mse = self._calculate_mse(y_train.iloc[test_idx], y_pred)
                 fold_scores.append(mse)
 
-            cv_scores.append(np.mean(fold_scores))
+            # Calculate mean CV score, handling infinite values
+            finite_scores = [s for s in fold_scores if np.isfinite(s)]
+            if finite_scores:
+                cv_scores.append(np.mean(finite_scores))
+            else:
+                cv_scores.append(np.inf)
+
+        if not cv_scores or all(np.isinf(cv_scores)):
+            return min_k
 
         return k_values[np.argmin(cv_scores)]
 
     def fit(self):
+        """Fit k-NN imputer on training data.
+
+        Determines optimal k if not provided, fits scaling, and trains regressor.
+        Ensures k >= 2 for sampling strategy when possible.
+
+        Raises
+        ------
+        ValueError
+            If training data is empty or scaling fails.
+        """
         nona_sets = self.ml_data.nona_sets()
         if self.optimal_k is None:
             if self.optimal_k_method == "cv":
@@ -265,6 +487,18 @@ class KnnSampler(UncertaintyImputer):
         self.knn.fit(X_train_data, nona_sets.y)
 
     def _execute(self, random_state: int | None = None) -> pd.DataFrame:
+        """Execute imputation on missing target values.
+
+        Parameters
+        ----------
+        random_state : int, optional
+            Seed for reproducible sampling when strategy='sample'.
+
+        Returns
+        -------
+        pd.DataFrame
+            Complete dataframe with imputed target values.
+        """
         imputed_df = self.ml_data.df
         imputed_target_values, self.bounds = self.impute_for_dataset(
             imputed_df, self.ml_data.nona_sets().y, random_state
