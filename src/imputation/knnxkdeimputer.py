@@ -1,17 +1,17 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 
 from src.data_preparation.data_description import DataFrameMLData
 from src.imputation import Imputer
 from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
+from src.imputation.normalization import normalization, renormalization
 
 
 class KNNxKDEImputer(Imputer):
     """KNN x KDE imputer for missing value imputation.
 
     Uses k-nearest neighbors with kernel density estimation to impute missing values.
-    Data is standardized (zero mean, unit variance) using StandardScaler before imputation.
+    Data is normalized to [0, 1] using min-max normalization as per the paper implementation.
 
     Args:
         ml_data: DataFrameMLData containing the dataset
@@ -36,38 +36,36 @@ class KNNxKDEImputer(Imputer):
 
     def _execute(self) -> pd.DataFrame:
         imputed_df = self.ml_data.df
-        scaler = StandardScaler()
-        imputed_df[
+
+        # Extract data as numpy array
+        data_array = imputed_df[
             [
                 self.ml_data.dataset_descriptor.input_column,
                 self.ml_data.dataset_descriptor.target_column,
             ]
-        ] = scaler.fit_transform(
-            imputed_df[
-                [
-                    self.ml_data.dataset_descriptor.input_column,
-                    self.ml_data.dataset_descriptor.target_column,
-                ]
-            ]
-        )
-        imputed_samples = self.knnxkde.impute_samples(imputed_df.to_numpy())
+        ].to_numpy()
+
+        # Normalize using paper's implementation
+        norm_data, norm_params = normalization(data_array)
+
+        # Run KNNxKDE imputation on normalized data
+        imputed_samples = self.knnxkde.impute_samples(norm_data)
         if imputed_samples is None:
             raise ValueError("samples were not imputed")
-        for (idx, _), samples in imputed_samples.items():
-            imputed_df.loc[idx, self.ml_data.dataset_descriptor.target_column] = (
-                np.random.choice(samples)
-            )
+
+        # Apply imputation
+        for (idx, col_idx), samples in imputed_samples.items():
+            norm_data[idx, col_idx] = np.random.choice(samples)
+
+        # Renormalize back to original scale
+        denorm_data = renormalization(norm_data, norm_params)
+
+        # Update dataframe
         imputed_df[
             [
                 self.ml_data.dataset_descriptor.input_column,
                 self.ml_data.dataset_descriptor.target_column,
             ]
-        ] = scaler.inverse_transform(
-            imputed_df[
-                [
-                    self.ml_data.dataset_descriptor.input_column,
-                    self.ml_data.dataset_descriptor.target_column,
-                ]
-            ]
-        )
+        ] = denorm_data
+
         return imputed_df
