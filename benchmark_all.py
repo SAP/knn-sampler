@@ -30,7 +30,7 @@ from src.imputation.imputer import Imputer
 from src.imputation_context import ImputationContext
 from src.stats_utils import (
     calculate_p_value,
-    multivariate_energy_distance_imputed,
+    multivariate_energy_distance,
     permutation_test,
 )
 from src.utils import do_imputation, instantiate_imputers
@@ -177,7 +177,7 @@ def evaluate_imputers(
         rmse_value = math.sqrt(
             mean_squared_error(context.actual_data, context.predicted_data)
         )
-        energy_distance = multivariate_energy_distance_imputed(
+        energy_distance = multivariate_energy_distance(
             context.predicted_data.to_numpy(), context.actual_data.to_numpy()
         )
         Z = pd.concat([context.predicted_data, context.actual_data], ignore_index=True)
