@@ -66,7 +66,7 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
 }
 
 ## KnnSampler config ##
-iterations = 5 
+iterations = 5
 #######################
 
 # Data regeneration policy
