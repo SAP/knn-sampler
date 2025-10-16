@@ -394,7 +394,6 @@ class KnnSampler(UncertaintyImputer):
                         numerator = float(np.sum(weights_array * row_targets))
                         denominator = float(np.sum(weights_array))
                         # Fallback for extreme numerical stability issues.
-                        # Use np.finfo(float).tiny, the smallest positive normalized float, for thresholding.
                         # This avoids hardcoding and references the numerical precision context.
                         if (
                             not np.isfinite(denominator)
