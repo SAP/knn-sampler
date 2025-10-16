@@ -488,7 +488,7 @@ class KnnSampler(UncertaintyImputer):
                 self.optimal_k = self.find_optimal_k_kfold(nona_sets)
             else:
                 self.optimal_k = self.find_optimal_k(nona_sets)
-        if self.optimal_k is None or self.optimal_k < 1:
+        if self.optimal_k is None:
             self.optimal_k = 1
         if self.optimal_k > len(nona_sets.x):
             self.optimal_k = len(nona_sets.x)
