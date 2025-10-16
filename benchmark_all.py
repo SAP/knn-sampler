@@ -405,8 +405,6 @@ def benchmark_for_seed(
 
 
 def benchmark():
-    # Estimate total time (no display)
-
     # Measure actual execution time
     start_time = time.perf_counter()
 
