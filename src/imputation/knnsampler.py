@@ -299,7 +299,7 @@ class KnnSampler(UncertaintyImputer):
             return 1, 1
         min_k = 1
         heuristic_max_k = int(np.sqrt(n_samples))
-        structural_max_k = n_samples - 1
+        structural_max_k = np.inf
         if self.optimal_k_method == "loo_penalized":
             structural_max_k = n_samples - 1
         elif self.optimal_k_method == "kfold":
