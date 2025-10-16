@@ -393,8 +393,10 @@ class KnnSampler(UncertaintyImputer):
                         weights_array = 1.0 / safe_distances
                         numerator = float(np.sum(weights_array * row_targets))
                         denominator = float(np.sum(weights_array))
-                        # Fallback for extreme numerical stability issues
-                        if not np.isfinite(denominator) or denominator < 1e-300:
+                        # Fallback for extreme numerical stability issues.
+                        # Use np.finfo(float).tiny, the smallest positive normalized float, for thresholding.
+                        # This avoids hardcoding and references the numerical precision context.
+                        if not np.isfinite(denominator) or denominator < np.finfo(float).tiny:
                             preds[i] = float(np.mean(row_targets))
                         else:
                             preds[i] = numerator / denominator
