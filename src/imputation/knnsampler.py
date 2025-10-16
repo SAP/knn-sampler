@@ -13,7 +13,7 @@ from src.imputation.imputer import BoundsPerPercentile
 ImputationStrategy = Literal["sample", "mean", "median"]
 KNNAlgorithm = Literal["auto", "ball_tree", "kd_tree", "brute"]
 ScalingStrategy = Literal["none", "standardization", "normalization"]
-KOptimalMethod = Literal["loo_heuristic", "kfold_cv"]
+KOptimalMethod = Literal["loo_penalized", "kfold"]
 KNNWeights = Literal["uniform", "distance"]
 
 
@@ -68,12 +68,14 @@ class KnnSampler(UncertaintyImputer):
         KNN search algorithm.
     weights : {'uniform', 'distance'}
         Neighbor weighting strategy.
-    optimal_k_method : {'loo_heuristic', 'kfold_cv'}
-         Method for k selection when n_neighbors is None.
+    optimal_k_method : {'loo_penalized', 'kfold'}
+         Method used when n_neighbors is None:
+         - 'loo_penalized': leave-one-out penalized MSE criterion.
+         - 'kfold': K-fold cross-validation MSE.
     optimal_k_random_state : int | None
-        Seed for K-Fold cross-validation during k selection.
+        Seed for K-Fold splitting when optimal_k_method='kfold'.
     optimal_k_cv_folds : int
-        Number of CV folds, must be >= 2.
+        Number of CV folds (>=2) for optimal_k_method='kfold'.
     scaling_optimal_k : {'none', 'standardization', 'normalization'}
         Scaling applied during k selection phase.
     scaling_fit : {'none', 'standardization', 'normalization'}
@@ -97,7 +99,7 @@ class KnnSampler(UncertaintyImputer):
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
-        optimal_k_method: KOptimalMethod = "loo_heuristic",
+        optimal_k_method: KOptimalMethod = "loo_penalized",
         optimal_k_random_state: Optional[int] = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
@@ -115,7 +117,7 @@ class KnnSampler(UncertaintyImputer):
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
-        optimal_k_method: KOptimalMethod = "loo_heuristic",
+        optimal_k_method: KOptimalMethod = "loo_penalized",
         optimal_k_random_state: Optional[int] = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
@@ -132,7 +134,7 @@ class KnnSampler(UncertaintyImputer):
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
-        optimal_k_method: KOptimalMethod = "loo_heuristic",
+        optimal_k_method: KOptimalMethod = "loo_penalized",
         optimal_k_random_state: Optional[int] = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
@@ -155,7 +157,7 @@ class KnnSampler(UncertaintyImputer):
         ):
             _validate_option(label, value, ("none", "standardization", "normalization"))
         _validate_option(
-            "optimal_k_method", optimal_k_method, ("loo_heuristic", "kfold_cv")
+            "optimal_k_method", optimal_k_method, ("loo_penalized", "kfold")
         )
         _validate_option("weights", weights, ("uniform", "distance"))
         if optimal_k_cv_folds < 2:
@@ -292,20 +294,24 @@ class KnnSampler(UncertaintyImputer):
         min_k = 1
         # Candidates
         sqrt_part = int(np.sqrt(n_samples))
-        half_part = n_samples // 2  # grows faster, but will be capped
+        half_part = (
+            n_samples // 2
+        )  # half_part increases faster than sqrt_part as n_samples grows, but will be capped at 50 below
         max_k = max(5, sqrt_part, min(50, half_part))
-        # Never exceed n_samples-1 (must have at least one other sample in neighborhood)
+        # Never exceed n_samples-1: in leave-one-out cross-validation, each sample is excluded from its own neighborhood,
+        # so the maximum valid k is n_samples-1 (must have at least one other sample in the neighborhood, excluding self).
         max_k = min(max_k, n_samples - 1)
         if max_k < min_k:
             max_k = min_k
         return min_k, max_k
 
     def find_optimal_k(self, train_sets: MLSets) -> int:
-        """Select optimal k by minimizing leave-one-out based penalized MSE.
+        """Select optimal k via penalized leave-one-out MSE.
 
-        For each candidate k, predictions are formed using k nearest neighbors
-        (excluding self). MSE is penalized by ((k+1)²/k²) factor. Returns k
-        with lowest penalized MSE.
+        For each candidate k, forms leave-one-out predictions using neighborhoods
+        excluding the sample itself. Applies multiplicative penalty ((k+1)^2 / k^2)
+        favoring smaller k when MSE differences are marginal. Returns k with
+        minimal penalized MSE.
 
         Parameters
         ----------
@@ -315,7 +321,7 @@ class KnnSampler(UncertaintyImputer):
         Returns
         -------
         int
-            Optimal number of neighbors (>= 1).
+            Optimal number of neighbors (>=1).
         """
         n = len(self.ml_data.dataframe)
         x_train, y_train = train_sets.x, train_sets.y
@@ -365,27 +371,28 @@ class KnnSampler(UncertaintyImputer):
             for k in k_values:
                 d_k = distances_excl[:, :k]
                 t_k = neighbor_targets[:, :k]
-                # Zero distance handling: if any zero distance in a row, average only zero-distance targets
-                zero_mask_array = np.asarray(d_k == 0.0)
+                # Zero distance (or numerically ~0) handling
+                zero_mask_array = np.isclose(d_k, 0.0)
                 any_zero = np.any(zero_mask_array, axis=1)
                 preds = np.empty(n_train, dtype=float)
 
-                # Process each row individually for robustness
                 for i in range(n_train):
+                    row_targets = t_k[i, :]
                     if any_zero[i]:
-                        # Row has zero-distance neighbors: average only zero-distance targets
-                        row_zero_mask = zero_mask_array[i, :]
-                        row_targets = t_k[i, :]
-                        zero_targets = row_targets[row_zero_mask]
+                        # Average only zero-distance (or near-zero) targets
+                        zero_targets = row_targets[zero_mask_array[i, :]]
                         preds[i] = float(np.mean(zero_targets))
                     else:
-                        # Row has no zero-distance neighbors: use inverse distance weights
                         row_distances = d_k[i, :]
-                        row_targets = t_k[i, :]
-                        weights_array = 1.0 / (row_distances + 1e-12)
+                        safe_distances = np.maximum(row_distances, np.finfo(float).eps)
+                        weights_array = 1.0 / safe_distances
                         numerator = float(np.sum(weights_array * row_targets))
                         denominator = float(np.sum(weights_array))
-                        preds[i] = numerator / denominator
+                        # Fallback for extreme numerical stability issues
+                        if not np.isfinite(denominator) or denominator < 1e-300:
+                            preds[i] = float(np.mean(row_targets))
+                        else:
+                            preds[i] = numerator / denominator
 
                 mse = self._calculate_mse(y_train, preds)
                 adjusted_score = mse * ((k + 1) ** 2 / (k**2))
@@ -396,17 +403,18 @@ class KnnSampler(UncertaintyImputer):
         return k_values[np.argmin(scores)]
 
     def find_optimal_k_kfold(self, train_sets: MLSets) -> int:
-        """Find optimal k using K-fold cross-validation.
+        """Find optimal k via K-fold cross-validation MSE.
 
         Parameters
         ----------
         train_sets : MLSets
-            Training data containing input features and target values.
+            Training features and target values.
 
         Returns
         -------
         int
-            Optimal number of neighbors (k >= 1) based on CV MSE.
+            k minimizing mean CV MSE (>=1). Falls back to penalized LOO when
+            sample count < number of folds.
         """
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
@@ -471,7 +479,7 @@ class KnnSampler(UncertaintyImputer):
         """
         nona_sets = self.ml_data.nona_sets()
         if self.optimal_k is None:
-            if self.optimal_k_method == "kfold_cv":
+            if self.optimal_k_method == "kfold":
                 self.optimal_k = self.find_optimal_k_kfold(nona_sets)
             else:
                 self.optimal_k = self.find_optimal_k(nona_sets)
