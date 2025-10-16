@@ -17,7 +17,7 @@ KOptimalMethod = Literal["loo_penalized", "kfold"]
 KNNWeights = Literal["uniform", "distance"]
 
 
-def _validate_option(name: str, value, allowed: tuple[str, ...]) -> None:
+def _validate_option(name: str, value: str, allowed: tuple[str, ...]) -> None:
     """Validate that `value` is one of `allowed` and raise ValueError with
     a consistent message if not.
 
