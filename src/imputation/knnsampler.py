@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.neighbors import KNeighborsRegressor
 
-from src.data_preparation.data_description import DataFrameMLData, MLSets
+from src.data_preparation.data_description import DataFrameMLData
 from src.imputation import UncertaintyImputer
 from src.imputation.imputer import BoundsPerPercentile
 
@@ -47,7 +47,9 @@ class KnnSampler(UncertaintyImputer):
         self.optimal_k: int | None = n_neighbors
         self.knn: KNeighborsRegressor | None = None
 
-    def find_optimal_k(self, train_sets: MLSets):
+    def find_optimal_k(self):
+        train_sets = self.ml_data.nona_sets()
+
         # No NaN values for x & y
         x_train, y_train = train_sets.x, train_sets.y
 
@@ -56,7 +58,7 @@ class KnnSampler(UncertaintyImputer):
         x_scaled = scaler.fit_transform(x_train)
 
         # Sample size
-        n = len(x_train)
+        n = len(self.ml_data.dataframe)
 
         # Maximum value for k based on the square root heuristic
         max_k = int(np.sqrt(n))
@@ -80,9 +82,7 @@ class KnnSampler(UncertaintyImputer):
     def fit(self):
         nona_sets = self.ml_data.nona_sets()
         self.optimal_k = (
-            self.optimal_k
-            if self.optimal_k is not None
-            else self.find_optimal_k(nona_sets)
+            self.optimal_k if self.optimal_k is not None else self.find_optimal_k()
         )
 
         self.knn = KNeighborsRegressor(n_neighbors=self.optimal_k)
