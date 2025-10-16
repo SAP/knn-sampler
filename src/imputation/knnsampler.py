@@ -396,7 +396,10 @@ class KnnSampler(UncertaintyImputer):
                         # Fallback for extreme numerical stability issues.
                         # Use np.finfo(float).tiny, the smallest positive normalized float, for thresholding.
                         # This avoids hardcoding and references the numerical precision context.
-                        if not np.isfinite(denominator) or denominator < np.finfo(float).tiny:
+                        if (
+                            not np.isfinite(denominator)
+                            or denominator < np.finfo(float).tiny
+                        ):
                             preds[i] = float(np.mean(row_targets))
                         else:
                             preds[i] = numerator / denominator
