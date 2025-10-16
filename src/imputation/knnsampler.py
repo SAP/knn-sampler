@@ -274,33 +274,38 @@ class KnnSampler(UncertaintyImputer):
         return float(np.mean((y_true - y_pred) ** 2))
 
     def _get_k_bounds(self, n_samples: int) -> tuple[int, int]:
-        """Calculate reasonable bounds for k selection.
+        """Compute (min_k, max_k) bounds for candidates k selection.
 
-        Uses heuristic combining sqrt(n) and n/2, capped at 50, never exceeding n_samples-1.
-        For very small datasets (n <= 2), returns (1,1).
+        Rules:
+        - If n_samples <= 2: return (1, 1).
+        - min_k is always 1 otherwise.
+        - Heuristic upper candidate: floor(sqrt(n_samples)).
+        - Structural cap:
+          * 'loo_penalized': n_samples - 1 (not including self).
+          * 'kfold': n_samples - ceil(n_samples / n_folds) (smallest training fold size).
+        - max_k = min(heuristic_upper, structural_cap); enforce max_k >= min_k.
 
         Parameters
         ----------
         n_samples : int
-            Number of training samples.
+            Number of rows with non-missing target used for k search.
 
         Returns
         -------
         tuple[int, int]
-            (min_k, max_k) bounds for k selection.
+            (min_k, max_k) with both >= 1.
         """
         if n_samples <= 2:
             return 1, 1
         min_k = 1
-        # Candidates
-        sqrt_part = int(np.sqrt(n_samples))
-        half_part = (
-            n_samples // 2
-        )  # half_part increases faster than sqrt_part as n_samples grows, but will be capped at 50 below
-        max_k = max(5, sqrt_part, min(50, half_part))
-        # Never exceed n_samples-1: in leave-one-out cross-validation, each sample is excluded from its own neighborhood,
-        # so the maximum valid k is n_samples-1 (must have at least one other sample in the neighborhood, excluding self).
-        max_k = min(max_k, n_samples - 1)
+        heuristic_max_k = int(np.sqrt(n_samples))
+        structural_max_k = n_samples - 1
+        if self.optimal_k_method == "loo_penalized":
+            structural_max_k = n_samples - 1
+        elif self.optimal_k_method == "kfold":
+            folds = max(2, self.optimal_k_cv_folds)
+            structural_max_k = n_samples - int(np.ceil(n_samples / folds))
+        max_k = min(heuristic_max_k, structural_max_k)
         if max_k < min_k:
             max_k = min_k
         return min_k, max_k
@@ -323,10 +328,10 @@ class KnnSampler(UncertaintyImputer):
         int
             Optimal number of neighbors (>=1).
         """
-        n = len(self.ml_data.dataframe)
+        n_samples = len(self.ml_data.dataframe)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
-        min_k, max_k = self._get_k_bounds(n)
+        min_k, max_k = self._get_k_bounds(n_samples)
         if max_k <= min_k:
             return min_k
 
@@ -337,20 +342,20 @@ class KnnSampler(UncertaintyImputer):
         knn.fit(x_scaled, y_train)
         distances, indices = knn.kneighbors(x_scaled, return_distance=True)
 
-        n_train = len(x_train)
+        n_train_samples = len(x_train)
         # Identify and remove self-index per row
-        self_mask = indices == np.arange(n_train)[:, None]
+        self_mask = indices == np.arange(n_train_samples)[:, None]
         # Safety: if a row has no self (rare), fallback to dropping first neighbor
         if not np.all(np.sum(self_mask, axis=1) == 1):
             # Fallback: assume first column is self if missing
             enforced_mask = np.zeros_like(self_mask, dtype=bool)
-            enforced_mask[np.arange(n_train), 0] = True
+            enforced_mask[np.arange(n_train_samples), 0] = True
             self_mask = np.where(
                 np.sum(self_mask, axis=1, keepdims=True) == 1, self_mask, enforced_mask
             )
         keep_mask = ~self_mask
-        distances_excl = distances[keep_mask].reshape(n_train, max_k)
-        indices_excl = indices[keep_mask].reshape(n_train, max_k)
+        distances_excl = distances[keep_mask].reshape(n_train_samples, max_k)
+        indices_excl = indices[keep_mask].reshape(n_train_samples, max_k)
 
         y_array = y_train.to_numpy()
         neighbor_targets = y_array[indices_excl]  # shape (n, max_k)
@@ -374,9 +379,9 @@ class KnnSampler(UncertaintyImputer):
                 # Zero distance (or numerically ~0) handling
                 zero_mask_array = np.isclose(d_k, 0.0)
                 any_zero = np.any(zero_mask_array, axis=1)
-                preds = np.empty(n_train, dtype=float)
+                preds = np.empty(n_train_samples, dtype=float)
 
-                for i in range(n_train):
+                for i in range(n_train_samples):
                     row_targets = t_k[i, :]
                     if any_zero[i]:
                         # Average only zero-distance (or near-zero) targets
