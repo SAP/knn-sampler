@@ -39,7 +39,7 @@ def _validate_option(name: str, value, allowed: tuple[str, ...]) -> None:
         If `value` is not in `allowed` tuple.
     """
     if value not in allowed:
-        allowed_str = ",".join(f"'{a}'" for a in allowed)
+        allowed_str = ", ".join(f"'{a}'" for a in allowed)
         raise ValueError(f"{name} must be one of: {allowed_str}")
 
 
