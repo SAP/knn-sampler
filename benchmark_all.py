@@ -256,7 +256,7 @@ def evaluate_imputers(
                 context.predicted_data[context.dataset_descriptor.target_column],
             )
         )
-        energy_distance = multivariate_energy_distance_imputed(
+        energy_distance = multivariate_energy_distance(
             context.predicted_data[context.dataset_descriptor.target_column]
             .to_numpy()
             .reshape(-1, 1),
