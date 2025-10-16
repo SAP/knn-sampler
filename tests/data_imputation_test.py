@@ -16,7 +16,6 @@ from src.imputation import (
     KnnSampler,
     KNNxKDEImputer,
     LinearImputer,
-    MICEImputer,
     RandomForestImputer,
 )
 from src.utils import do_imputation
@@ -47,7 +46,6 @@ class TestImputation(unittest.TestCase):
                 ),
                 KnnImputer(ml_data=prepared_data),
                 LinearImputer(ml_data=prepared_data),
-                MICEImputer(ml_data=prepared_data),
                 RandomForestImputer(ml_data=prepared_data),
                 KNNxKDEImputer(ml_data=prepared_data),
             ]

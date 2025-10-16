@@ -317,9 +317,9 @@ class KnnSampler(UncertaintyImputer):
         int
             Optimal number of neighbors (>= 1).
         """
+        n = len(self.ml_data.dataframe)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
-        n = len(x_train)
         min_k, max_k = self._get_k_bounds(n)
         if max_k <= min_k:
             return min_k
@@ -331,19 +331,20 @@ class KnnSampler(UncertaintyImputer):
         knn.fit(x_scaled, y_train)
         distances, indices = knn.kneighbors(x_scaled, return_distance=True)
 
+        n_train = len(x_train)
         # Identify and remove self-index per row
-        self_mask = indices == np.arange(n)[:, None]
+        self_mask = indices == np.arange(n_train)[:, None]
         # Safety: if a row has no self (rare), fallback to dropping first neighbor
         if not np.all(np.sum(self_mask, axis=1) == 1):
             # Fallback: assume first column is self if missing
             enforced_mask = np.zeros_like(self_mask, dtype=bool)
-            enforced_mask[np.arange(n), 0] = True
+            enforced_mask[np.arange(n_train), 0] = True
             self_mask = np.where(
                 np.sum(self_mask, axis=1, keepdims=True) == 1, self_mask, enforced_mask
             )
         keep_mask = ~self_mask
-        distances_excl = distances[keep_mask].reshape(n, max_k)
-        indices_excl = indices[keep_mask].reshape(n, max_k)
+        distances_excl = distances[keep_mask].reshape(n_train, max_k)
+        indices_excl = indices[keep_mask].reshape(n_train, max_k)
 
         y_array = y_train.to_numpy()
         neighbor_targets = y_array[indices_excl]  # shape (n, max_k)
@@ -367,10 +368,10 @@ class KnnSampler(UncertaintyImputer):
                 # Zero distance handling: if any zero distance in a row, average only zero-distance targets
                 zero_mask_array = np.asarray(d_k == 0.0)
                 any_zero = np.any(zero_mask_array, axis=1)
-                preds = np.empty(n, dtype=float)
+                preds = np.empty(n_train, dtype=float)
 
                 # Process each row individually for robustness
-                for i in range(n):
+                for i in range(n_train):
                     if any_zero[i]:
                         # Row has zero-distance neighbors: average only zero-distance targets
                         row_zero_mask = zero_mask_array[i, :]

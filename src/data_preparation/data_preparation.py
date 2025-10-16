@@ -67,11 +67,7 @@ class Mcar(MissingDataGenerator):
             if isinstance(self.missing_values, Rate)
             else self.missing_values
         )
-        missing_indexes = np.random.choice(
-            df.index,
-            size=size,
-            replace=False,
-        )
+        missing_indexes = np.random.choice(df.index, size=size, replace=False)
         actual_values = df.loc[missing_indexes, "Y"].copy()
         df.loc[missing_indexes, "Y"] = np.nan
         return missing_indexes, actual_values
@@ -228,6 +224,7 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         missing_generator: MissingDataGenerator,
         geometry_type: Literal["linear"] | Literal["ring"] = "linear",
         dataset_descriptor=None,
+        excel_path: str | None = None,
     ):
         super().__init__(
             dataset_descriptor=dataset_descriptor or DatasetDescriptor("X", "Y"),
@@ -237,6 +234,7 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         self.linear_interpolation_ratio = linear_interpolation_ratio
         self.geometry_type: Literal["linear"] | Literal["ring"] = geometry_type
         self.sample_size: int
+        self.excel_path = excel_path
 
     def build_synthetic_data(self) -> pd.DataFrame:
         match self.geometry_type:
