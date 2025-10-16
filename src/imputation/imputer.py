@@ -67,7 +67,7 @@ class Imputer(ABC):
         """
         result = self._execute(random_state)
         target_col = self.ml_data.dataset_descriptor.target_column
-        if result[target_col].isna().sum() > 0:
+        if result[target_col].isna().any():
             raise ValueError(
                 "Imputation error: DataFrame contains NaN values in target column"
             )
