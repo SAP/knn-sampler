@@ -303,7 +303,7 @@ class KnnSampler(UncertaintyImputer):
         if self.optimal_k_method == "loo_penalized":
             structural_max_k = n_samples - 1
         elif self.optimal_k_method == "kfold":
-            folds = max(2, self.optimal_k_cv_folds)
+            folds = self.optimal_k_cv_folds
             structural_max_k = n_samples - int(np.ceil(n_samples / folds))
         max_k = min(heuristic_max_k, structural_max_k)
         if max_k < min_k:
@@ -424,16 +424,16 @@ class KnnSampler(UncertaintyImputer):
             k minimizing mean CV MSE (>=1). Falls back to penalized LOO when
             sample count < number of folds.
         """
+        n_samples = len(self.ml_data.dataframe)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
-        n = len(x_train)
 
-        min_k, max_k = self._get_k_bounds(n)
+        min_k, max_k = self._get_k_bounds(n_samples)
         if max_k <= min_k:
             return min_k
 
         # Ensure we have enough samples for k-fold CV
-        if n < self.optimal_k_cv_folds:
+        if n_samples < self.optimal_k_cv_folds:
             # Fall back to leave-one-out if not enough samples for k-fold
             return self.find_optimal_k(train_sets)
 
