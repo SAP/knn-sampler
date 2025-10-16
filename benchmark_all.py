@@ -100,13 +100,12 @@ def plot_results_with_error_bars(
 ) -> None:
     methods = list(means.keys())
 
-    # Colors according to reference image - Order: kNNSampler → Random Forest → kNNImputer → KNNxKDE → MICE
     methods_order = [
         "KnnSampler",
         "RandomForestImputer",
         "KnnImputer",
         "KNNxKDEImputer",
-        "MICEImputer",
+        "LinearImputer",
     ]
     colors = [
         "#1f77b4",
@@ -167,7 +166,7 @@ def plot_aggregated_results_per_size(
         "RandomForestImputer",
         "KnnImputer",
         "KNNxKDEImputer",
-        "MICEImputer",
+        "LinearImputer",
     ]
     colors = ["#1f77b4", "#2ca02c", "#9467bd", "#ffb6c1", "#d4af37"]
     color_map = dict(zip(methods_order, colors, strict=False))

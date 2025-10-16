@@ -3,7 +3,6 @@ from .knnimputer import KnnImputer
 from .knnsampler import KnnSampler
 from .knnxkdeimputer import KNNxKDEImputer
 from .linearimputer import LinearImputer
-from .miceimputer import MICEImputer
 from .randomforestimputer import RandomForestImputer
 
 __all__ = [
@@ -12,7 +11,6 @@ __all__ = [
     "KnnImputer",
     "KnnSampler",
     "LinearImputer",
-    "MICEImputer",
     "RandomForestImputer",
     "UncertaintyImputer",
 ]
