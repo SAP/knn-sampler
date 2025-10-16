@@ -32,7 +32,7 @@ from src.imputation.imputer import Imputer
 from src.imputation_context import ImputationContext
 from src.stats_utils import (
     calculate_p_value,
-    multivariate_energy_distance_imputed,
+    multivariate_energy_distance,
     permutation_test,
 )
 from src.utils import do_imputation, instantiate_imputers
