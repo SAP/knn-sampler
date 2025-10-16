@@ -66,7 +66,7 @@ imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
 }
 
 ## KnnSampler config ##
-iterations = 5  # Aligned with Imputation-full-code (1).py range(2)
+iterations = 5 
 #######################
 
 # Data regeneration policy

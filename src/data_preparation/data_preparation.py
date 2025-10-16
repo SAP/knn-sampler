@@ -224,7 +224,6 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         missing_generator: MissingDataGenerator,
         geometry_type: Literal["linear"] | Literal["ring"] = "linear",
         dataset_descriptor=None,
-        round_trip_excel: bool = False,
         excel_path: str | None = None,
     ):
         super().__init__(
