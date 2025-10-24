@@ -328,7 +328,7 @@ class KnnSampler(UncertaintyImputer):
         int
             Optimal number of neighbors (>=1).
         """
-        n_samples = len(self.ml_data.dataframe)
+        n_samples = len(self.ml_data.df)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
         min_k, max_k = self._get_k_bounds(n_samples)
@@ -424,7 +424,7 @@ class KnnSampler(UncertaintyImputer):
             k minimizing mean CV MSE (>=1). Falls back to penalized LOO when
             sample count < number of folds.
         """
-        n_samples = len(self.ml_data.dataframe)
+        n_samples = len(self.ml_data.df)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
 
