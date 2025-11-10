@@ -88,7 +88,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
         case "generated":
             if sample_size is None:
                 raise ValueError(
-                    "Sample size is required for generated dataset (sample_size missing or blank)"
+                    "sample_size is not defined or set to 0"
                 )
             return DataGenerator(
                 linear_interpolation_ratio=float(fields["linear_interpolation_ratio"]),
