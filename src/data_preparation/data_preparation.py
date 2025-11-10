@@ -219,7 +219,9 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
 
         # Diagnostics: report X range
         try:
-            print(f"[diag] ExcelDataPreparator X range: min={df['X'].min()} max={df['X'].max()} sample_size={self.sample_size}")
+            print(
+                f"[diag] ExcelDataPreparator X range: min={df['X'].min()} max={df['X'].max()} sample_size={self.sample_size}"
+            )
         except Exception:
             pass
 
