@@ -53,22 +53,28 @@ class KNNxKDEImputer(Imputer):
         scaler = MinMaxScaler()
 
         # Normalize only (X, Y)
-        imputed_df[[input_col, target_col]] = scaler.fit_transform(imputed_df[[input_col, target_col]])
+        imputed_df[[input_col, target_col]] = scaler.fit_transform(
+            imputed_df[[input_col, target_col]]
+        )
 
         if self.compatibility_mode:
             # Add sequential index as first column - this changes the algorithmic behavior
             # by adding an extra dimension to the distance calculations
             index_values = np.arange(len(imputed_df)).reshape(-1, 1)
-            data_matrix = np.column_stack([
-                index_values,
-                imputed_df[input_col].values,
-                imputed_df[target_col].values
-            ])
+            data_matrix = np.column_stack(
+                [
+                    index_values,
+                    imputed_df[input_col].values,
+                    imputed_df[target_col].values,
+                ]
+            )
             samples = self.knnxkde.impute_samples(data_matrix)
 
             if samples is None or len(samples) == 0:
                 # Denormalize and return original data
-                imputed_df[[input_col, target_col]] = scaler.inverse_transform(imputed_df[[input_col, target_col]])
+                imputed_df[[input_col, target_col]] = scaler.inverse_transform(
+                    imputed_df[[input_col, target_col]]
+                )
                 return imputed_df
 
             # Apply imputed values - target is now in column 2 (due to index column)
@@ -78,15 +84,16 @@ class KNNxKDEImputer(Imputer):
                     imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
         else:
             # Standard mode: use only input and target columns as 2D matrix
-            data_matrix = np.column_stack([
-                imputed_df[input_col].values,
-                imputed_df[target_col].values
-            ])
+            data_matrix = np.column_stack(
+                [imputed_df[input_col].values, imputed_df[target_col].values]
+            )
             samples = self.knnxkde.impute_samples(data_matrix)
 
             if samples is None or len(samples) == 0:
                 # Denormalize and return original data
-                imputed_df[[input_col, target_col]] = scaler.inverse_transform(imputed_df[[input_col, target_col]])
+                imputed_df[[input_col, target_col]] = scaler.inverse_transform(
+                    imputed_df[[input_col, target_col]]
+                )
                 return imputed_df
 
             # Apply imputed values - target is in column 1
@@ -96,5 +103,7 @@ class KNNxKDEImputer(Imputer):
                     imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
 
         # Denormalize (X, Y)
-        imputed_df[[input_col, target_col]] = scaler.inverse_transform(imputed_df[[input_col, target_col]])
+        imputed_df[[input_col, target_col]] = scaler.inverse_transform(
+            imputed_df[[input_col, target_col]]
+        )
         return imputed_df

@@ -154,7 +154,7 @@ if _firstImport:
         "int": int,
         "int[]": lambda val: [int(v.strip()) for v in val.split(",")],
         "float": float,
-        "bool": lambda val: val.lower() in ('true', '1', 'yes', 'on'),
+        "bool": lambda val: val.lower() in ("true", "1", "yes", "on"),
         "str": str,
     }
 
