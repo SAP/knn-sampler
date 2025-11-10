@@ -24,7 +24,7 @@ dependencies = [
 pre-commit = "^4"
 taskipy = "^1"
 ruff = "^0.14"
-pytest = "^8"
+pytest = "^9"
 line-profiler = "^5"
 ipykernel = "^7"
 
