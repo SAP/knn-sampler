@@ -172,7 +172,7 @@ class KNNxKDE:
         return imputed_data
 
     def local_distribution(self, miss_data):
-        (n, d) = miss_data.shape
+        (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         cells_distrib = dict()  # store (weights, values)
