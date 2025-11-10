@@ -124,7 +124,7 @@ class KNNxKDE:
         return imputed_samples
 
     def impute_mean(self, miss_data, nb_draws=1000):
-        (n, d) = miss_data.shape
+        (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_data = np.copy(miss_data)
