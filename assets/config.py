@@ -64,7 +64,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
                 f"sample_size should be an integer or left blank, got '{raw_sample_size}'"
             ) from e
         if sample_size < 1:
-            raise ValueError("Sample size should be an integer in [1, +∞[")
+            raise ValueError("sample_size should be an integer in [1, +∞[")
 
     missing_values = (
         Rate(float(rate))
@@ -87,9 +87,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
     match fields["type"]:
         case "generated":
             if sample_size is None:
-                raise ValueError(
-                    "Sample size is required for generated dataset (sample_size missing or blank)"
-                )
+                raise ValueError("sample_size is not defined or set to 0")
             return DataGenerator(
                 linear_interpolation_ratio=float(fields["linear_interpolation_ratio"]),
                 sample_size=sample_size,
@@ -154,7 +152,7 @@ if _firstImport:
         "int": int,
         "int[]": lambda val: [int(v.strip()) for v in val.split(",")],
         "float": float,
-        "bool": lambda val: val.lower() in ('true', '1', 'yes', 'on'),
+        "bool": lambda val: val.lower() in ("true", "1", "yes", "on"),
         "str": str,
     }
 
