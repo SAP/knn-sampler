@@ -129,7 +129,7 @@ class KNNxKDE:
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_data = np.copy(miss_data)
 
-        for n, current_miss_pattern in enumerate(all_miss_patterns):
+        for _n, current_miss_pattern in enumerate(all_miss_patterns):
             if not np.logical_or.reduce(
                 current_miss_pattern
             ):  # if there is no missing value
