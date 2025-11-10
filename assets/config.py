@@ -57,7 +57,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
     sample_size = fields.get("sample_size")
     if sample_size is not None and sample_size.strip() != "":
         try:
-            sample_size = int(raw_sample_size)
+            sample_size = int(sample_size)
         except ValueError as e:
             raise ValueError(
                 f"sample_size should be an integer or left blank, got '{raw_sample_size}'"
