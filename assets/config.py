@@ -64,7 +64,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
                 f"sample_size should be an integer or left blank, got '{raw_sample_size}'"
             ) from e
         if sample_size < 1:
-            raise ValueError("Sample size should be an integer in [1, +∞[")
+            raise ValueError("sample_size should be an integer in [1, +∞[")
 
     missing_values = (
         Rate(float(rate))
