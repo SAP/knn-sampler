@@ -53,11 +53,18 @@ def get_field(fields, field_name):
 
 
 def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
-    if (sample_size_str := fields.get("sample_size")) is None:
-        raise ValueError("Sample size is not defined")
-    sample_size = int(sample_size_str)
-    if sample_size < 1:
-        raise ValueError("Sample size should be an integer in [1, +∞[")
+    # sample_size may be blank or omitted for excel datasets (use full file). It is mandatory for generated datasets.
+    raw_sample_size = fields.get("sample_size")
+    sample_size: int | None = None
+    if raw_sample_size is not None and raw_sample_size.strip() != "":
+        try:
+            sample_size = int(raw_sample_size)
+        except ValueError as e:
+            raise ValueError(
+                f"sample_size should be an integer or left blank, got '{raw_sample_size}'"
+            ) from e
+        if sample_size < 1:
+            raise ValueError("Sample size should be an integer in [1, +∞[")
 
     missing_values = (
         Rate(float(rate))
@@ -80,7 +87,9 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
     match fields["type"]:
         case "generated":
             if sample_size is None:
-                raise ValueError("Sample size is not defined or set to 0")
+                raise ValueError(
+                    "Sample size is required for generated dataset (sample_size missing or blank)"
+                )
             return DataGenerator(
                 linear_interpolation_ratio=float(fields["linear_interpolation_ratio"]),
                 sample_size=sample_size,
@@ -88,6 +97,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
                 geometry_type=fields.get("geometry_type", "linear"),
             ), missing_values
         case "excel":
+            # sample_size None => read entire file inside ExcelDataPreparator
             return ExcelDataPreparator(
                 dataset_descriptor=ExcelDatasetDescriptor(
                     fields["input"], fields["target"], fields["path"], fields["sheet"]
@@ -114,7 +124,9 @@ if _firstImport:
 
     imputers_str: list[str] = [
         i.strip()
-        for i in conf["imputation_algorithms"]["imputation_algorithms"].split(",")
+        for raw in conf["imputation_algorithms"]["imputation_algorithms"].split("|")
+        for i in raw.split(",")
+        if i.strip() != ""
     ]
 
     for imp_str in imputers_str:
@@ -142,7 +154,8 @@ if _firstImport:
         "int": int,
         "int[]": lambda val: [int(v.strip()) for v in val.split(",")],
         "float": float,
-        "bool": bool,
+        "bool": lambda val: val.lower() in ('true', '1', 'yes', 'on'),
+        "str": str,
     }
 
     for istr in imputers_str:
