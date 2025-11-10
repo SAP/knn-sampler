@@ -34,7 +34,7 @@ class Imputer(ABC):
 
 
 # Couple of percentile to couple of bounds (lower then upper)
-type BoundsPerPercentile = dict[tuple[float, float], tuple[list[float], list[float]]]
+BoundsPerPercentile = dict[tuple[float, float], tuple[list[float], list[float]]]
 
 
 class UncertaintyImputer(Imputer):
