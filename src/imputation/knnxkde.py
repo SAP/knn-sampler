@@ -109,6 +109,8 @@ class KNNxKDE:
                 d_ij = nan_std_euclidean_distances(data_receivers, data_givers, sigmas)
             elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
+            else:
+                raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
@@ -155,6 +157,8 @@ class KNNxKDE:
                 d_ij = nan_std_euclidean_distances(data_receivers, data_givers, sigmas)
             elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
+            else:
+                raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
@@ -203,6 +207,8 @@ class KNNxKDE:
                 d_ij = nan_std_euclidean_distances(data_receivers, data_givers, sigmas)
             elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
+            else:
+                raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)

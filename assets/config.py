@@ -66,7 +66,7 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
 
     missing_values = (
         Rate(float(rate))
-        if (rate := get_field(fields, "missing_rate"))
+        if (rate := fields.get("missing_rate"))
         else int(fields["missing_values"])
     )
     missing_generator: MissingDataGenerator
@@ -74,10 +74,6 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
         case "MCAR":
             missing_generator = Mcar(missing_values)
         case "MAR":
-            if not get_field(fields, "missing_rate"):
-                raise ValueError(
-                    f"missing_rate must be defined for MAR mechanism in dataset {name}"
-                )
             missing_generator = Mar(
                 float(fields["MAR_chunk_start"]),
                 float(fields["MAR_chunk_end"]),

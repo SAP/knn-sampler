@@ -11,9 +11,11 @@ class KNNxKDEImputer(Imputer):
     """Impute missing target values using kNNxKDE sampling.
 
     The implementation adds a sequential index column to the data matrix [Index, X, Y]
-    to match the original kNNxKDE workflow. This affects distance calculations and
-    neighbor selection.
+    to preserve the original kNNxKDE algorithm behavior from the research paper.
+    This index column participates in distance calculations and affects neighbor selection.
     """
+
+    TARGET_COL_IDX = 2  # Index of target column in [Index, X, Y] matrix
 
     def __init__(
         self,
@@ -30,7 +32,7 @@ class KNNxKDEImputer(Imputer):
         pass
 
     def _execute(self) -> pd.DataFrame:
-        imputed_df = self.ml_data.df
+        imputed_df = self.ml_data.df.copy()
         input_col = self.descriptor.input_column
         target_col = self.descriptor.target_column
 
@@ -55,9 +57,8 @@ class KNNxKDEImputer(Imputer):
             )
             return imputed_df
 
-        target_col_idx = 2
         for (row_idx, col_idx), draws in samples.items():
-            if col_idx == target_col_idx and len(draws) > 0:
+            if col_idx == self.TARGET_COL_IDX and len(draws) > 0:
                 imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
 
         imputed_df[[input_col, target_col]] = scaler.inverse_transform(
