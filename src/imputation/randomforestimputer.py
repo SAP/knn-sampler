@@ -11,7 +11,7 @@ class RandomForestImputer(Imputer):
         self.ml_data: DataFrameMLData
         self.rf = RandomForestRegressor(random_state=random_state)
 
-    def fit(self):
+    def fit(self) -> None:
         sets = self.ml_data.nona_sets()
         self.rf.fit(sets.x, sets.y)
 

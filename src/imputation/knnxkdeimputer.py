@@ -10,18 +10,9 @@ from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
 class KNNxKDEImputer(Imputer):
     """Impute missing target values using kNNxKDE sampling.
 
-    Structure aligned with other Imputer implementations:
-    - Constructor stores model/tunables.
-    - fit() kept as a no-op for interface consistency.
-    - _execute() performs the actual imputation and returns a full DataFrame copy.
-
-    The implementation uses a data matrix structure [Index, X, Y] (3 columns) passed to KNNxKDE,
-    mimicking the original external workflows. The indexing is required since the imputation
-    algorithm relies on row/column indices, but it doesn't change the DataFrame structure itself
-    or the logic.
-
-    The extra index column changes distance calculations and neighbor selection,
-    affecting imputation quality.
+    The implementation adds a sequential index column to the data matrix [Index, X, Y]
+    to match the original kNNxKDE workflow. This affects distance calculations and
+    neighbor selection.
     """
 
     def __init__(

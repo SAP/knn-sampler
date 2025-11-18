@@ -26,5 +26,5 @@ class KnnImputer(Imputer):
 
         return imputed_df
 
-    def fit(self):
+    def fit(self) -> None:
         pass

@@ -79,7 +79,7 @@ class KnnSampler(UncertaintyImputer):
 
         return k_values[np.argmin(adjusted_scores_k)]
 
-    def fit(self):
+    def fit(self) -> None:
         nona_sets = self.ml_data.nona_sets()
         self.optimal_k = (
             self.optimal_k if self.optimal_k is not None else self.find_optimal_k()
