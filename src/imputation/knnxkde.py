@@ -158,7 +158,9 @@ class KNNxKDE:
             elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
             else:
-                raise ValueError(f"Unknown metric '{self.metric}'. Expected 'nan_std_eucl' or 'nan_eucl'.")
+                raise ValueError(
+                    f"Unknown metric '{self.metric}'. Expected 'nan_std_eucl' or 'nan_eucl'."
+                )
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
