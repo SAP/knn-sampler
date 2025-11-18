@@ -97,7 +97,6 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
                 geometry_type=fields.get("geometry_type", "linear"),
             ), missing_values
         case "excel":
-            # sample_size None => read entire file inside ExcelDataPreparator
             return ExcelDataPreparator(
                 dataset_descriptor=ExcelDatasetDescriptor(
                     fields["input"], fields["target"], fields["path"], fields["sheet"]
