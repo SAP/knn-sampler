@@ -4,7 +4,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 from src.data_preparation.data_description import DataFrameMLData
 from src.imputation import Imputer
-from src.imputation.knnxkde import KNNxKDE
+from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
 
 
 class KNNxKDEImputer(Imputer):
@@ -29,31 +29,25 @@ class KNNxKDEImputer(Imputer):
         ml_data: DataFrameMLData,
         h: float = 0.03,
         tau: float = 1.0 / 50.0,
-        metric: str = "nan_std_eucl",
+        metric: KNNxKdeMetric = "nan_std_eucl",
     ) -> None:
         super().__init__(ml_data=ml_data)
         self.descriptor = ml_data.dataset_descriptor
         self.knnxkde = KNNxKDE(h=h, tau=tau, metric=metric)
 
-    def fit(self) -> None:  # kept for API symmetry, no training required
-        return None
+    def fit(self) -> None:
+        pass
 
     def _execute(self) -> pd.DataFrame:
-        df = self.ml_data.df
+        imputed_df = self.ml_data.df
         input_col = self.descriptor.input_column
         target_col = self.descriptor.target_column
 
-        # avoid rewriting original data
-        imputed_df = df.copy()
         scaler = MinMaxScaler()
-
-        # Normalize only (X, Y)
         imputed_df[[input_col, target_col]] = scaler.fit_transform(
             imputed_df[[input_col, target_col]]
         )
 
-        # Add sequential index as first column - this changes the algorithmic behavior
-        # by adding an extra dimension to the distance calculations
         index_values = np.arange(len(imputed_df)).reshape(-1, 1)
         data_matrix = np.column_stack(
             [
@@ -65,19 +59,16 @@ class KNNxKDEImputer(Imputer):
         samples = self.knnxkde.impute_samples(data_matrix)
 
         if samples is None or len(samples) == 0:
-            # Denormalize and return original data
             imputed_df[[input_col, target_col]] = scaler.inverse_transform(
                 imputed_df[[input_col, target_col]]
             )
             return imputed_df
 
-        # Apply imputed values - target is now in column 2 (due to index column)
         target_col_idx = 2
         for (row_idx, col_idx), draws in samples.items():
             if col_idx == target_col_idx and len(draws) > 0:
                 imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
 
-        # Denormalize (X, Y)
         imputed_df[[input_col, target_col]] = scaler.inverse_transform(
             imputed_df[[input_col, target_col]]
         )

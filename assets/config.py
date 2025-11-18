@@ -53,7 +53,6 @@ def get_field(fields, field_name):
 
 
 def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
-    # sample_size may be blank or omitted for excel datasets (use full file). It is mandatory for generated datasets.
     sample_size = fields.get("sample_size")
     if sample_size is not None and sample_size.strip() != "":
         try:

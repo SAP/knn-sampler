@@ -1,6 +1,10 @@
+from typing import Literal
+
 import numpy as np
 from scipy.special import softmax
 from sklearn.metrics.pairwise import euclidean_distances, nan_euclidean_distances
+
+type KNNxKdeMetric = Literal["nan_eucl"] | Literal["nan_std_eucl"]
 
 
 def select_receivers(norm_miss_data, current_miss_pattern):
@@ -69,11 +73,11 @@ def nan_std_euclidean_distances(data_receivers, data_givers, sigmas):
 
 
 class KNNxKDE:
-    def __init__(self, h=0.03, tau=1.0 / 50.0, metric="nan_std_eucl"):
+    def __init__(self, h=0.03, tau=1.0 / 50.0, metric: KNNxKdeMetric = "nan_std_eucl"):
         self.h = h
         self.tau = tau
         if metric in ["nan_eucl", "nan_std_eucl"]:
-            self.metric = metric
+            self.metric: KNNxKdeMetric = metric
         else:
             raise AttributeError("Metric should be 'nan_eucl' or 'nan_std_eucl'")
 
@@ -81,7 +85,7 @@ class KNNxKDE:
         (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
-        imputed_samples = dict()
+        imputed_samples = {}
 
         for _n, current_miss_pattern in enumerate(all_miss_patterns):
             if not np.logical_or.reduce(
@@ -175,7 +179,7 @@ class KNNxKDE:
         (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
-        cells_distrib = dict()  # store (weights, values)
+        cells_distrib = {}  # store (weights, values)
 
         for _n, current_miss_pattern in enumerate(all_miss_patterns):
             if not np.logical_or.reduce(
