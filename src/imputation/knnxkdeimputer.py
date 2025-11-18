@@ -8,54 +8,64 @@ from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
 
 
 class KNNxKDEImputer(Imputer):
+    """Impute missing target values using kNNxKDE sampling.
+
+    The implementation adds a sequential index column to the data matrix, resulting in a matrix with the following column order:
+        - Column 0: Sequential index
+        - Column 1: Input feature (X)
+        - Column 2: Target feature (Y)
+
+    This ordering is critical: TARGET_COL_IDX = 2 refers to the target column in the [Index, X, Y] matrix.
+    The index column participates in distance calculations and affects neighbor selection, preserving the original kNNxKDE algorithm behavior from the research paper.
+    """
+
+    TARGET_COL_IDX = 2  # Index of target column in [Index, X, Y] matrix
+
     def __init__(
         self,
         ml_data: DataFrameMLData,
-        h=0.03,
-        tau=50.0 / 1000.0,
+        h: float = 0.03,
+        tau: float = 1.0 / 50.0,
         metric: KNNxKdeMetric = "nan_std_eucl",
-    ):
-        super().__init__(ml_data)
+    ) -> None:
+        super().__init__(ml_data=ml_data)
         self.descriptor = ml_data.dataset_descriptor
         self.knnxkde = KNNxKDE(h=h, tau=tau, metric=metric)
 
-    def fit(self):
+    def fit(self) -> None:
         pass
 
     def _execute(self) -> pd.DataFrame:
-        imputed_df = self.ml_data.df
+        imputed_df = self.ml_data.df.copy()
+        input_col = self.descriptor.input_column
+        target_col = self.descriptor.target_column
+
         scaler = MinMaxScaler()
-        imputed_df[
+        imputed_df[[input_col, target_col]] = scaler.fit_transform(
+            imputed_df[[input_col, target_col]]
+        )
+
+        index_values = np.arange(len(imputed_df)).reshape(-1, 1)
+        data_matrix = np.column_stack(
             [
-                self.ml_data.dataset_descriptor.input_column,
-                self.ml_data.dataset_descriptor.target_column,
-            ]
-        ] = scaler.fit_transform(
-            imputed_df[
-                [
-                    self.ml_data.dataset_descriptor.input_column,
-                    self.ml_data.dataset_descriptor.target_column,
-                ]
+                index_values,
+                imputed_df[input_col].values,
+                imputed_df[target_col].values,
             ]
         )
-        imputed_samples = self.knnxkde.impute_samples(imputed_df.to_numpy())
-        if imputed_samples is None:
-            raise ValueError("samples were not imputed")
-        for (idx, _), samples in imputed_samples.items():
-            imputed_df.loc[idx, self.ml_data.dataset_descriptor.target_column] = (
-                np.random.choice(samples)
+        samples = self.knnxkde.impute_samples(data_matrix)
+
+        if samples is None or len(samples) == 0:
+            imputed_df[[input_col, target_col]] = scaler.inverse_transform(
+                imputed_df[[input_col, target_col]]
             )
-        imputed_df[
-            [
-                self.ml_data.dataset_descriptor.input_column,
-                self.ml_data.dataset_descriptor.target_column,
-            ]
-        ] = scaler.inverse_transform(
-            imputed_df[
-                [
-                    self.ml_data.dataset_descriptor.input_column,
-                    self.ml_data.dataset_descriptor.target_column,
-                ]
-            ]
+            return imputed_df
+
+        for (row_idx, col_idx), draws in samples.items():
+            if col_idx == self.TARGET_COL_IDX and len(draws) > 0:
+                imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
+
+        imputed_df[[input_col, target_col]] = scaler.inverse_transform(
+            imputed_df[[input_col, target_col]]
         )
         return imputed_df
