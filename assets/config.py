@@ -54,7 +54,7 @@ def get_field(fields, field_name):
 
 def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
     sample_size = fields.get("sample_size")
-    if sample_size is not None and sample_size.strip() != "":
+    if isinstance(sample_size, str) and sample_size.strip() != "":
         try:
             sample_size = int(sample_size)
         except ValueError as e:
