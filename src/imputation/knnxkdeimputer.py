@@ -10,9 +10,13 @@ from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
 class KNNxKDEImputer(Imputer):
     """Impute missing target values using kNNxKDE sampling.
 
-    The implementation adds a sequential index column to the data matrix [Index, X, Y]
-    to preserve the original kNNxKDE algorithm behavior from the research paper.
-    This index column participates in distance calculations and affects neighbor selection.
+    The implementation adds a sequential index column to the data matrix, resulting in a matrix with the following column order:
+        - Column 0: Sequential index
+        - Column 1: Input feature (X)
+        - Column 2: Target feature (Y)
+
+    This ordering is critical: TARGET_COL_IDX = 2 refers to the target column in the [Index, X, Y] matrix.
+    The index column participates in distance calculations and affects neighbor selection, preserving the original kNNxKDE algorithm behavior from the research paper.
     """
 
     TARGET_COL_IDX = 2  # Index of target column in [Index, X, Y] matrix
