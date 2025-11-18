@@ -58,7 +58,7 @@ class KnnSampler(UncertaintyImputer):
         x_scaled = scaler.fit_transform(x_train)
 
         # Sample size
-        n = len(self.ml_data.dataframe)
+        n = len(self.ml_data.df)
 
         # Maximum value for k based on the square root heuristic
         max_k = int(np.sqrt(n))
