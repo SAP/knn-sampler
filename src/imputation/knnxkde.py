@@ -208,8 +208,6 @@ class KNNxKDE:
             elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
             else:
-                raise ValueError(f"Unknown metric '{self.metric}' in local_distribution; expected 'nan_std_eucl' or 'nan_eucl'.")
-            else:
                 raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
