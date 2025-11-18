@@ -15,16 +15,13 @@ class KNNxKDEImputer(Imputer):
     - fit() kept as a no-op for interface consistency.
     - _execute() performs the actual imputation and returns a full DataFrame copy.
 
-    compatibility_mode controls the data matrix structure passed to KNNxKDE:
-    - True: [Index, X, Y] matrix (3 columns) - mimics original external workflows
-    - False: [X, Y] matrix (2 columns) - clean implementation
-
-    The indexing is required since the imputation algorithm relies on row/column indices,
-    but it doesn't change the DataFrame structure itself or the logic.
+    The implementation uses a data matrix structure [Index, X, Y] (3 columns) passed to KNNxKDE,
+    mimicking the original external workflows. The indexing is required since the imputation
+    algorithm relies on row/column indices, but it doesn't change the DataFrame structure itself
+    or the logic.
 
     The extra index column changes distance calculations and neighbor selection,
-    affecting imputation quality. Use True for backward compatibility with
-    existing results, False for cleaner algorithmic behavior.
+    affecting imputation quality.
     """
 
     def __init__(
@@ -33,12 +30,10 @@ class KNNxKDEImputer(Imputer):
         h: float = 0.03,
         tau: float = 1.0 / 50.0,
         metric: str = "nan_std_eucl",
-        compatibility_mode: bool = True,  # Mimics original workflow with index column
     ) -> None:
         super().__init__(ml_data=ml_data)
         self.descriptor = ml_data.dataset_descriptor
         self.knnxkde = KNNxKDE(h=h, tau=tau, metric=metric)
-        self.compatibility_mode = compatibility_mode
 
     def fit(self) -> None:  # kept for API symmetry, no training required
         return None
@@ -57,50 +52,30 @@ class KNNxKDEImputer(Imputer):
             imputed_df[[input_col, target_col]]
         )
 
-        if self.compatibility_mode:
-            # Add sequential index as first column - this changes the algorithmic behavior
-            # by adding an extra dimension to the distance calculations
-            index_values = np.arange(len(imputed_df)).reshape(-1, 1)
-            data_matrix = np.column_stack(
-                [
-                    index_values,
-                    imputed_df[input_col].values,
-                    imputed_df[target_col].values,
-                ]
+        # Add sequential index as first column - this changes the algorithmic behavior
+        # by adding an extra dimension to the distance calculations
+        index_values = np.arange(len(imputed_df)).reshape(-1, 1)
+        data_matrix = np.column_stack(
+            [
+                index_values,
+                imputed_df[input_col].values,
+                imputed_df[target_col].values,
+            ]
+        )
+        samples = self.knnxkde.impute_samples(data_matrix)
+
+        if samples is None or len(samples) == 0:
+            # Denormalize and return original data
+            imputed_df[[input_col, target_col]] = scaler.inverse_transform(
+                imputed_df[[input_col, target_col]]
             )
-            samples = self.knnxkde.impute_samples(data_matrix)
+            return imputed_df
 
-            if samples is None or len(samples) == 0:
-                # Denormalize and return original data
-                imputed_df[[input_col, target_col]] = scaler.inverse_transform(
-                    imputed_df[[input_col, target_col]]
-                )
-                return imputed_df
-
-            # Apply imputed values - target is now in column 2 (due to index column)
-            target_col_idx = 2
-            for (row_idx, col_idx), draws in samples.items():
-                if col_idx == target_col_idx and len(draws) > 0:
-                    imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
-        else:
-            # Standard mode: use only input and target columns as 2D matrix
-            data_matrix = np.column_stack(
-                [imputed_df[input_col].values, imputed_df[target_col].values]
-            )
-            samples = self.knnxkde.impute_samples(data_matrix)
-
-            if samples is None or len(samples) == 0:
-                # Denormalize and return original data
-                imputed_df[[input_col, target_col]] = scaler.inverse_transform(
-                    imputed_df[[input_col, target_col]]
-                )
-                return imputed_df
-
-            # Apply imputed values - target is in column 1
-            target_col_idx = 1
-            for (row_idx, col_idx), draws in samples.items():
-                if col_idx == target_col_idx and len(draws) > 0:
-                    imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
+        # Apply imputed values - target is now in column 2 (due to index column)
+        target_col_idx = 2
+        for (row_idx, col_idx), draws in samples.items():
+            if col_idx == target_col_idx and len(draws) > 0:
+                imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
 
         # Denormalize (X, Y)
         imputed_df[[input_col, target_col]] = scaler.inverse_transform(

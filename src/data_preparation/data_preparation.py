@@ -101,13 +101,6 @@ class Mar(MissingDataGenerator):
         ].index
         chunk_size = len(chunk_indexes)
         if chunk_size == 0:
-            # Diagnostic warning
-            try:
-                print(
-                    f"[diag] MAR chunk empty. X range=({df['X'].min()}, {df['X'].max()}). Requested chunk=({self.chunk_start}, {self.chunk_end})."
-                )
-            except Exception:
-                pass
             return np.array([]), pd.Series()
         size = (
             int(chunk_size * self.missing_values.nb)
@@ -115,9 +108,6 @@ class Mar(MissingDataGenerator):
             else min(chunk_size, self.missing_values)
         )
         if size == 0:
-            print(
-                f"[diag] MAR computed size 0 (chunk_size={chunk_size}, missing_values={self.missing_values})."
-            )
             return np.array([]), pd.Series()
         missing_indexes = np.random.choice(
             chunk_indexes,
@@ -217,23 +207,9 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         # sort by index and reset it
         df = df.sort_values(by="X").reset_index(drop=True)
 
-        # Diagnostics: report X range
-        try:
-            print(
-                f"[diag] ExcelDataPreparator X range: min={df['X'].min()} max={df['X'].max()} sample_size={self.sample_size}"
-            )
-        except Exception:
-            pass
-
         self.missing_indexes, self.actual_values = (
             self.missing_type.create_missing_data(df)
         )
-
-        if isinstance(self.missing_type, Mar) and len(self.missing_indexes) == 0:
-            print(
-                f"[diag] MAR produced no missing values for chunk ({self.missing_type.chunk_start}, {self.missing_type.chunk_end})."
-                f" Consider widening the interval or verifying scaling."
-            )
 
         return DataFrameMLData(
             df, DatasetDescriptor("X", "Y", other_columns=self.columns_to_keep)

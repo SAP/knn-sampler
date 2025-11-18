@@ -75,6 +75,10 @@ def _extract_data_preparator(fields, name) -> tuple[DataPreparator, Rate | int]:
         case "MCAR":
             missing_generator = Mcar(missing_values)
         case "MAR":
+            if not get_field(fields, "missing_rate"):
+                raise ValueError(
+                    f"missing_rate must be defined for MAR mechanism in dataset {name}"
+                )
             missing_generator = Mar(
                 float(fields["MAR_chunk_start"]),
                 float(fields["MAR_chunk_end"]),
@@ -121,8 +125,7 @@ if _firstImport:
 
     imputers_str: list[str] = [
         i.strip()
-        for raw in conf["imputation_algorithms"]["imputation_algorithms"].split("|")
-        for i in raw.split(",")
+        for i in conf["imputation_algorithms"]["imputation_algorithms"].split(",")
         if i.strip() != ""
     ]
 
