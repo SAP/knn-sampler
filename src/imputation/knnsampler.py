@@ -28,7 +28,7 @@ def _validate_option(name: str, value: str, allowed: tuple[str, ...]) -> None:
     ----------
     name : str
         Name of the parameter being validated, used in error messages.
-    value : Any
+    value : str
         The value to validate against allowed options.
     allowed : tuple[str, ...]
         Tuple of allowed string values.
@@ -161,7 +161,7 @@ class KnnSampler(UncertaintyImputer):
         )
         _validate_option("weights", weights, ("uniform", "distance"))
         if optimal_k_cv_folds < 2:
-            raise ValueError("optimal_k_cv_folds must be >= 2")
+            raise ValueError(f"optimal_k_cv_folds must be >= 2, got {optimal_k_cv_folds}")
 
         super().__init__(
             ml_data=ml_data,
@@ -282,13 +282,13 @@ class KnnSampler(UncertaintyImputer):
         - Heuristic upper candidate: floor(sqrt(n_samples)).
         - Structural cap:
           * 'loo_penalized': n_samples - 1 (not including self).
-          * 'kfold': n_samples - ceil(n_samples / n_folds) (smallest training fold size).
+          * 'kfold': n_samples - ceil(n_samples / n_folds) (smallest training fold size; ceil(n_samples / n_folds) is the largest test fold size).
         - max_k = min(heuristic_upper, structural_cap); enforce max_k >= min_k.
 
         Parameters
         ----------
         n_samples : int
-            Number of rows with non-missing target used for k search.
+            Total number of rows in the dataset used for k search.
 
         Returns
         -------

@@ -25,7 +25,7 @@ class KNNxKDEImputer(Imputer):
         self,
         ml_data: DataFrameMLData,
         h: float = 0.03,
-        tau: float = 1.0 / 50.0,
+        tau: float = 0.02,
         metric: KNNxKdeMetric = "nan_std_eucl",
     ) -> None:
         super().__init__(ml_data=ml_data)
@@ -42,7 +42,7 @@ class KNNxKDEImputer(Imputer):
         Parameters
         ----------
         random_state : int | None
-            Currently ignored - uses global NumPy RNG for sampling.
+            Seed for reproducible sampling.
 
         Returns
         -------
@@ -77,9 +77,10 @@ class KNNxKDEImputer(Imputer):
             )
             return df
 
+        rng = np.random.default_rng(random_state)
         for (row_idx, col_idx), draws in samples.items():
             if col_idx == self.TARGET_COL_IDX and len(draws) > 0:
-                df.loc[row_idx, target_col] = np.random.choice(draws)
+                df.loc[row_idx, target_col] = rng.choice(draws)
 
         df[[input_col, target_col]] = scaler.inverse_transform(
             df[[input_col, target_col]]
