@@ -16,8 +16,23 @@ ScalingStrategy = Literal["none", "standardization", "normalization"]
 KOptimalMethod = Literal["loo_penalized", "kfold"]
 KNNWeights = Literal["uniform", "distance"]
 
+IMPUTATION_STRATEGIES: tuple[ImputationStrategy, ...] = ("sample", "mean", "median")
+KNN_ALGORITHMS: tuple[KNNAlgorithm, ...] = ("auto", "ball_tree", "kd_tree", "brute")
+SCALING_STRATEGIES: tuple[ScalingStrategy, ...] = (
+    "none",
+    "standardization",
+    "normalization",
+)
+K_OPTIMAL_METHODS: tuple[KOptimalMethod, ...] = ("loo_penalized", "kfold")
+KNN_WEIGHTS: tuple[KNNWeights, ...] = ("uniform", "distance")
 
-def _validate_option(name: str, value: str, allowed: tuple[str, ...]) -> None:
+DEFAULT_LOWER_PERCENTILES: list[float] = [5.0]
+DEFAULT_UPPER_PERCENTILES: list[float] = [95.0]
+DEFAULT_RANDOM_STATE: int = 42
+DEFAULT_CV_FOLDS: int = 3
+
+
+def validate_option(name: str, value: str, allowed: tuple[str, ...]) -> None:
     """Validate that `value` is one of `allowed` and raise ValueError with
     a consistent message if not.
 
@@ -136,32 +151,30 @@ class KnnSampler(UncertaintyImputer):
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
         optimal_k_random_state: Optional[int] = None,
-        optimal_k_cv_folds: int = 3,
+        optimal_k_cv_folds: int = DEFAULT_CV_FOLDS,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
     ):
         # Defaults percentiles
-        lower_percentiles = lower_percentiles or [5]
-        upper_percentiles = upper_percentiles or [95]
+        lower_percentiles = lower_percentiles or DEFAULT_LOWER_PERCENTILES
+        upper_percentiles = upper_percentiles or DEFAULT_UPPER_PERCENTILES
 
         if n_neighbors is not None and n_neighbors < 1:
             raise ValueError("n_neighbors must be >= 1")
 
-        _validate_option("strategy", strategy, ("sample", "mean", "median"))
-        _validate_option(
-            "algorithm", algorithm, ("auto", "ball_tree", "kd_tree", "brute")
-        )
+        validate_option("strategy", strategy, IMPUTATION_STRATEGIES)
+        validate_option("algorithm", algorithm, KNN_ALGORITHMS)
         for label, value in (
             ("scaling_optimal_k", scaling_optimal_k),
             ("scaling_fit", scaling_fit),
         ):
-            _validate_option(label, value, ("none", "standardization", "normalization"))
-        _validate_option(
-            "optimal_k_method", optimal_k_method, ("loo_penalized", "kfold")
-        )
-        _validate_option("weights", weights, ("uniform", "distance"))
+            validate_option(label, value, SCALING_STRATEGIES)
+        validate_option("optimal_k_method", optimal_k_method, K_OPTIMAL_METHODS)
+        validate_option("weights", weights, KNN_WEIGHTS)
         if optimal_k_cv_folds < 2:
-            raise ValueError(f"optimal_k_cv_folds must be >= 2, got {optimal_k_cv_folds}")
+            raise ValueError(
+                f"optimal_k_cv_folds must be >= 2, got {optimal_k_cv_folds}"
+            )
 
         super().__init__(
             ml_data=ml_data,
@@ -305,7 +318,7 @@ class KnnSampler(UncertaintyImputer):
         elif self.optimal_k_method == "kfold":
             folds = self.optimal_k_cv_folds
             structural_max_k = n_samples - int(np.ceil(n_samples / folds))
-        max_k = min(heuristic_max_k, structural_max_k)
+        max_k = int(min(heuristic_max_k, structural_max_k))
         if max_k < min_k:
             max_k = min_k
         return min_k, max_k
@@ -491,8 +504,7 @@ class KnnSampler(UncertaintyImputer):
                 self.optimal_k = self.find_optimal_k_kfold(nona_sets)
             else:
                 self.optimal_k = self.find_optimal_k(nona_sets)
-        if self.optimal_k is None:
-            self.optimal_k = 1
+
         if self.optimal_k > len(nona_sets.x):
             self.optimal_k = len(nona_sets.x)
         if self.strategy == "sample" and self.optimal_k == 1 and len(nona_sets.x) >= 2:
@@ -578,8 +590,10 @@ class KnnSampler(UncertaintyImputer):
                 )
         if self.strategy == "sample":
             self._init_rng(random_state)
-            rng = self._rng or np.random.default_rng(random_state)
-            random_columns = rng.integers(0, k, size=M)
+            if self._rng is None:
+                # Should be unreachable given _init_rng logic for strategy="sample"
+                self._rng = np.random.default_rng(random_state)
+            random_columns = self._rng.integers(0, k, size=M)
             imputed_values = y_neighbors[np.arange(M), random_columns]
         elif self.strategy == "mean":
             imputed_values = np.mean(y_neighbors, axis=1)
