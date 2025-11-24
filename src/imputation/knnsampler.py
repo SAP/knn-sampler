@@ -161,7 +161,9 @@ class KnnSampler(UncertaintyImputer):
         )
         _validate_option("weights", weights, ("uniform", "distance"))
         if optimal_k_cv_folds < 2:
-            raise ValueError(f"optimal_k_cv_folds must be >= 2, got {optimal_k_cv_folds}")
+            raise ValueError(
+                f"optimal_k_cv_folds must be >= 2, got {optimal_k_cv_folds}"
+            )
 
         super().__init__(
             ml_data=ml_data,
