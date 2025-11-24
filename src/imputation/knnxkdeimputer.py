@@ -54,37 +54,35 @@ class KNNxKDEImputer(Imputer):
         ValueError
             If imputation samples cannot be generated.
         """
-        imputed_df = self.ml_data.df.copy()
+        df = self.ml_data.df
         input_col = self.descriptor.input_column
         target_col = self.descriptor.target_column
 
         scaler = MinMaxScaler()
-        imputed_df[[input_col, target_col]] = scaler.fit_transform(
-            imputed_df[[input_col, target_col]]
-        )
+        df[[input_col, target_col]] = scaler.fit_transform(df[[input_col, target_col]])
 
-        index_values = np.arange(len(imputed_df)).reshape(-1, 1)
+        index_values = np.arange(len(df)).reshape(-1, 1)
         data_matrix = np.column_stack(
             [
                 index_values,
-                imputed_df[input_col].values,
-                imputed_df[target_col].values,
+                df[input_col].values,
+                df[target_col].values,
             ]
         )
         samples = self.knnxkde.impute_samples(data_matrix)
 
         if samples is None or len(samples) == 0:
-            imputed_df[[input_col, target_col]] = scaler.inverse_transform(
-                imputed_df[[input_col, target_col]]
+            df[[input_col, target_col]] = scaler.inverse_transform(
+                df[[input_col, target_col]]
             )
-            return imputed_df
+            return df
 
         for (row_idx, col_idx), draws in samples.items():
             if col_idx == self.TARGET_COL_IDX and len(draws) > 0:
-                imputed_df.loc[row_idx, target_col] = np.random.choice(draws)
+                df.loc[row_idx, target_col] = np.random.choice(draws)
 
-        imputed_df[[input_col, target_col]] = scaler.inverse_transform(
-            imputed_df[[input_col, target_col]]
+        df[[input_col, target_col]] = scaler.inverse_transform(
+            df[[input_col, target_col]]
         )
 
-        return imputed_df
+        return df
