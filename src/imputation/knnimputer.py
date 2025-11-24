@@ -28,7 +28,7 @@ class KnnImputer(Imputer):
         super().__init__(ml_data=ml_data)
         self.knn_imputer = KNNImputer(n_neighbors=n_neighbors)
 
-    def fit(self):
+    def fit(self) -> None:
         """Fit KNN imputer - no pre-fitting required for this implementation."""
         pass
 

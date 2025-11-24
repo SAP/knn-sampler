@@ -4,6 +4,8 @@ import numpy as np
 from scipy.special import softmax
 from sklearn.metrics.pairwise import euclidean_distances, nan_euclidean_distances
 
+type KNNxKdeMetric = Literal["nan_eucl"] | Literal["nan_std_eucl"]
+
 
 def select_receivers(norm_miss_data, current_miss_pattern):
     """Select observations matching the specified missing pattern.
@@ -93,9 +95,6 @@ def nan_std_euclidean_distances(data_receivers, data_givers, sigmas):
     return np.sqrt(dist)
 
 
-type KNNxKdeMetric = Literal["nan_eucl"] | Literal["nan_std_eucl"]
-
-
 class KNNxKDE:
     """Hybrid k-nearest neighbors and kernel density estimation imputer.
 
@@ -152,7 +151,7 @@ class KNNxKDE:
             Dictionary mapping (row_idx, col_idx) tuples to arrays of imputed samples.
             Returns None if imputation cannot be performed (no suitable donors).
         """
-        (_, d) = miss_data.shape
+        (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_samples = {}
@@ -170,15 +169,17 @@ class KNNxKDE:
             id_receivers = select_receivers(miss_data, current_miss_pattern)
             id_givers = select_givers(miss_data, current_miss_pattern)
             if len(id_givers) == 0:
-                return None  # imputation not performed
+                continue  # skip this pattern, continue with others
 
             data_receivers = miss_data[id_receivers]
             data_givers = miss_data[id_givers]
 
             if self.metric == "nan_std_eucl":
                 d_ij = nan_std_euclidean_distances(data_receivers, data_givers, sigmas)
-            else:
+            elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
+            else:
+                raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
@@ -216,7 +217,7 @@ class KNNxKDE:
             Copy of input data with missing values replaced by mean estimates.
             Returns None if imputation cannot be performed.
         """
-        (_, d) = miss_data.shape
+        (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_data = np.copy(miss_data)
@@ -234,15 +235,17 @@ class KNNxKDE:
             id_receivers = select_receivers(miss_data, current_miss_pattern)
             id_givers = select_givers(miss_data, current_miss_pattern)
             if len(id_givers) == 0:
-                return None  # imputation not performed
+                continue  # skip this pattern, continue with others
 
             data_receivers = miss_data[id_receivers]
             data_givers = miss_data[id_givers]
 
             if self.metric == "nan_std_eucl":
                 d_ij = nan_std_euclidean_distances(data_receivers, data_givers, sigmas)
-            else:
+            elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
+            else:
+                raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
@@ -280,7 +283,7 @@ class KNNxKDE:
             Dictionary storing local distribution parameters (weights, values)
             for each missing pattern.
         """
-        (_, d) = miss_data.shape
+        (_n, d) = miss_data.shape
         sigmas = np.nanstd(miss_data, axis=0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         cells_distrib = {}  # store (weights, values)
@@ -298,15 +301,17 @@ class KNNxKDE:
             id_receivers = select_receivers(miss_data, current_miss_pattern)
             id_givers = select_givers(miss_data, current_miss_pattern)
             if len(id_givers) == 0:
-                return None  # imputation not performed
+                continue  # skip this pattern, continue with others
 
             data_receivers = miss_data[id_receivers]
             data_givers = miss_data[id_givers]
 
             if self.metric == "nan_std_eucl":
                 d_ij = nan_std_euclidean_distances(data_receivers, data_givers, sigmas)
-            else:
+            elif self.metric == "nan_eucl":
                 d_ij = nan_euclidean_distances(data_receivers, data_givers)
+            else:
+                raise ValueError(f"Unknown metric: {self.metric}")
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)

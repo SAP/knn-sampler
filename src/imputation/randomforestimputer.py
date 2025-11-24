@@ -29,7 +29,7 @@ class RandomForestImputer(Imputer):
         super().__init__(ml_data=ml_data)
         self.rf = RandomForestRegressor(random_state=random_state)
 
-    def fit(self):
+    def fit(self) -> None:
         """Fit random forest model on complete cases."""
         sets = self.ml_data.nona_sets()
         self.rf.fit(sets.x, sets.y)

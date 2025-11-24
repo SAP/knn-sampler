@@ -474,7 +474,7 @@ class KnnSampler(UncertaintyImputer):
 
         return k_values[np.argmin(cv_scores)]
 
-    def fit(self):
+    def fit(self) -> None:
         """Fit k-NN imputer on training data.
 
         Determines optimal k if not provided, fits scaling, and trains regressor.
