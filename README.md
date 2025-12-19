@@ -16,7 +16,7 @@ If you use knnSampler, please cite the original [publication](https://arxiv.org/
 
 ```bibtex
 @article{ pashmchi2025knnsampler,
-  title={k{NNS}ampler: Stochastic Imputations for Recovering Missing Value Distributions},
+  title={kNNSampler: Stochastic Imputations for Recovering Missing Value Distributions},
   author={Parastoo PASHMCHI and J{\'e}r{\^o}me Benoit and Motonobu Kanagawa},
   journal={Transactions on Machine Learning Research},
   issn={2835-8856},
