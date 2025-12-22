@@ -15,8 +15,8 @@ It aims to preserve the underlying data distribution when imputing missing value
 If you use knnSampler, please cite the original [publication](https://arxiv.org/abs/2509.08366):
 
 ```bibtex
-@article{ pashmchi2025knnsampler,
-  title={kNNSampler: Stochastic Imputations for Recovering Missing Value Distributions},
+@article{pashmchi2025knnsampler,
+  title={k{NNS}ampler: Stochastic Imputations for Recovering Missing Value Distributions},
   author={Parastoo PASHMCHI and J{\'e}r{\^o}me Benoit and Motonobu Kanagawa},
   journal={Transactions on Machine Learning Research},
   issn={2835-8856},
