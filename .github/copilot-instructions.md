@@ -1,13 +1,13 @@
-# Copilot Instructions (repository-wide, language-agnostic)
+# Coding Agent Instructions (repository-wide, language-agnostic)
 
-These instructions guide GitHub Copilot to generate changes consistent with this repository's conventions, regardless of programming language.
+These instructions guide coding agents to generate changes consistent with this repository's conventions, regardless of programming language.
 
 ## Glossary
 
 - **Tunables**: user-adjustable parameters that shape behavior, exposed via options or configuration files.
 - **Canonical defaults**: the single, authoritative definition of all tunables and their defaults.
 
-## Implementation guidance for Copilot
+## Implementation guidance
 
 - **Before coding**:
   - Perform a comprehensive inventory of the codebase. Search for and read:
@@ -90,6 +90,15 @@ These instructions guide GitHub Copilot to generate changes consistent with this
 
 Documentation serves as an operational specification, not narrative prose.
 
+## Python conventions
+
+- **Naming**: Use snake_case for variables/functions/methods/modules, PascalCase for classes, SCREAMING_SNAKE_CASE for constants.
+- **Type hints**: Annotate all function signatures; use `mypy` for static type checking.
+- **Enumerations**: Prefer `StrEnum` for string-valued enumerations.
+- **Error handling**: Use specific exception types; avoid bare `except`.
+- **Formatting and linting**: Use `ruff` for formatting and linting; follow rules configured in `pyproject.toml`.
+- **Testing**: Use `pytest`; use plain `assert` and `pytest.raises` for error cases.
+
 ## Quality gates
 
 - Documented build/lint/type checks pass (where applicable).
@@ -140,4 +149,4 @@ def add_cli_options(parser):
 
 ---
 
-By following these instructions, Copilot should propose changes that are consistent and maintainable across languages.
+By following these instructions, coding agents should propose changes that are consistent and maintainable across languages.
