@@ -105,7 +105,7 @@ def aggregated_plot_title(metric_name: str) -> str:
         parts.append(f"missingness: {type(generator).__name__}")
     missing_values = generator.missing_values
     if isinstance(missing_values, Rate):
-        parts.append(f"rate: {missing_values.nb:.0%}")
+        parts.append(f"rate: {missing_values.nb:.1%}")
     else:
         parts.append(f"missing count: {missing_values}")
     return (
