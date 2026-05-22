@@ -99,8 +99,10 @@ def aggregated_plot_title(metric_name: str) -> str:
     if isinstance(generator, Mar):
         parts.append("missingness: MAR")
         parts.append(f"chunk: [{generator.chunk_start}, {generator.chunk_end}]")
-    else:
+    elif isinstance(generator, Mcar):
         parts.append("missingness: MCAR")
+    else:
+        parts.append(f"missingness: {type(generator).__name__}")
     missing_values = generator.missing_values
     if isinstance(missing_values, Rate):
         parts.append(f"rate: {missing_values.nb:.0%}")
