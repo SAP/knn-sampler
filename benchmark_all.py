@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
-from typing import Mapping
+from typing import Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -51,6 +51,7 @@ mcar_config = MissingConfig(Mcar(Rate(0.3)), [3000, 5000], 200)
 
 ###### configuration selection ######
 config: MissingConfig = mcar_config
+benchmark_geometry_type: Literal["linear", "ring"] = "ring"
 #####################################
 
 imputer_classes: dict[type[Imputer], dict[str, typing.Any]] = {
@@ -92,63 +93,26 @@ type Benchmark = tuple[Metric, Metric, Metric, list[dict[str, str]]]
 # root_et_values: dict[str, list[float]]
 
 
-def plot_results_with_error_bars(
-    means: dict[str, float],
-    stds: dict[str, float],
-    metric_name: str,
-    sample_sizes: list[int],
-) -> None:
-    methods = list(means.keys())
-
-    methods_order = [
-        "KnnSampler",
-        "RandomForestImputer",
-        "KnnImputer",
-        "KNNxKDEImputer",
-        "LinearImputer",
-    ]
-    colors = [
-        "#1f77b4",
-        "#2ca02c",
-        "#9467bd",
-        "#ffb6c1",
-        "#d4af37",
-    ]  # Blue, Green, Purple, Light pink, Beige/gold
-    color_map = dict(zip(methods_order, colors, strict=False))
-
-    x_indices = np.arange(len(sample_sizes))
-    plt.figure(figsize=(12, 6))
-
-    offset = 0.1
-    for i, method in enumerate(methods):
-        x_values = x_indices + (i - len(methods) / 2 + 0.5) * offset
-        mean_value = [means[method]] * len(sample_sizes)
-        std_value = [stds[method]] * len(sample_sizes)
-
-        # Use the corresponding color or a default color
-        color = color_map.get(method, "black")
-
-        plt.errorbar(
-            x_values,
-            mean_value,
-            yerr=std_value,
-            fmt="o",
-            capsize=5,
-            elinewidth=2,
-            markeredgewidth=2,
-            label=method,
-            color=color,
-        )
-
-    plt.xlabel("Sample Size")
-    plt.ylabel(f"{metric_name} Value")
-    plt.title(f"{metric_name} - Aggregated ({iterations} iterations)")
-    # Legend on the right as in the reference image
-    plt.legend(loc="center left", fontsize=10, bbox_to_anchor=(1, 0.5))
-    plt.grid(True)
-    plt.xticks(x_indices, [*map(str, sample_sizes)])
-    plt.tight_layout()
-    plt.show(block=True)
+def aggregated_plot_title(metric_name: str) -> str:
+    generator = config.missing_generator
+    parts = [f"geometry: {benchmark_geometry_type}"]
+    if isinstance(generator, Mar):
+        parts.append("missingness: MAR")
+        parts.append(f"chunk: [{generator.chunk_start}, {generator.chunk_end}]")
+    elif isinstance(generator, Mcar):
+        parts.append("missingness: MCAR")
+    else:
+        parts.append(f"missingness: {type(generator).__name__}")
+    missing_values = generator.missing_values
+    if isinstance(missing_values, Rate):
+        parts.append(f"rate: {missing_values.nb:.1%}")
+    else:
+        parts.append(f"missing count: {missing_values}")
+    return (
+        f"Aggregated Mean and Standard Deviation of {metric_name} "
+        f"over {iterations} iterations "
+        f"({', '.join(parts)})"
+    )
 
 
 def plot_aggregated_results_per_size(
@@ -195,9 +159,7 @@ def plot_aggregated_results_per_size(
 
     plt.xlabel("Sample Size")
     plt.ylabel("Mean Value")
-    plt.title(
-        f"Aggregated Mean and Standard Deviation of {metric_name} over {iterations} iterations"
-    )
+    plt.title(aggregated_plot_title(metric_name))
     plt.legend(
         loc="upper center",
         fontsize=12,
@@ -217,7 +179,7 @@ def create_data_preparator(sample_size):
         linear_interpolation_ratio=1.0,
         sample_size=sample_size,
         missing_generator=config.missing_generator,
-        geometry_type="ring",
+        geometry_type=benchmark_geometry_type,
     )
 
 
