@@ -94,11 +94,22 @@ type Benchmark = tuple[Metric, Metric, Metric, list[dict[str, str]]]
 
 
 def aggregated_plot_title(metric_name: str) -> str:
-    missing_mechanism = str(config.missing_generator)
+    generator = config.missing_generator
+    parts = [f"geometry: {benchmark_geometry_type}"]
+    if isinstance(generator, Mar):
+        parts.append("missingness: MAR")
+        parts.append(f"chunk: [{generator.chunk_start}, {generator.chunk_end}]")
+    else:
+        parts.append("missingness: MCAR")
+    missing_values = generator.missing_values
+    if isinstance(missing_values, Rate):
+        parts.append(f"rate: {missing_values.nb:.0%}")
+    else:
+        parts.append(f"missing count: {missing_values}")
     return (
         f"Aggregated Mean and Standard Deviation of {metric_name} "
         f"over {iterations} iterations "
-        f"({benchmark_geometry_type} geometry, {missing_mechanism} missingness)"
+        f"({', '.join(parts)})"
     )
 
 
