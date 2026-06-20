@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     name: Build with Python ${{ matrix.python }} on ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Poetry
         run: pipx install poetry
       - name: Setup Python ${{ matrix.python }}
