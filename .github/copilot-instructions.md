@@ -121,8 +121,8 @@ processing_mode = "piecewise"
 **Bad** (mixed styles, ambiguous):
 
 ```python
-thresholdValue = 0.06    # inconsistent case style
-threshold_aim = 0.06     # synonym creates ambiguity
+thresholdValue = 0.06  # inconsistent case style
+threshold_aim = 0.06  # synonym creates ambiguity
 ```
 
 ### Dynamic option generation
@@ -132,6 +132,7 @@ DEFAULT_PARAMS = {
     "threshold_value": 0.06,
     "processing_mode": "piecewise",
 }
+
 
 def add_cli_options(parser):
     for key, value in DEFAULT_PARAMS.items():
