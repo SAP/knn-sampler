@@ -23,7 +23,7 @@ dependencies = [
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4"
 taskipy = "^1"
-ruff = "^0.15.0"
+ruff = "^0.16.0"
 pytest = "^9"
 line-profiler = "^5"
 ipykernel = "^7"
