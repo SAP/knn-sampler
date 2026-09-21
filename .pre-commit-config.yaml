@@ -9,7 +9,7 @@ repos:
       args: [--staged, --contrib=CT1, --ignore=B6, --msg-filename]
 
 - repo: https://github.com/python-poetry/poetry
-  rev: 2.4.1
+  rev: 2.5.1
   hooks:
     - id: poetry-check
     - id: poetry-lock
@@ -41,7 +41,7 @@ repos:
       args: [--ignore-missing-imports, --check-untyped-defs, --explicit-package-bases]
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: v0.16.7
+  rev: v0.16.8
   hooks:
     # Run the linter.
     - id: ruff
