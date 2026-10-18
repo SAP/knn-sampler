@@ -181,7 +181,7 @@ def _extract_data_preparator(
                 chunk_end = float(fields["MAR_chunk_end"])
             except KeyError as e:
                 raise ValueError(
-                    f"MAR missing type requires MAR_chunk_start and MAR_chunk_end"
+                    "MAR missing type requires MAR_chunk_start and MAR_chunk_end"
                     f" for dataset {name}"
                 ) from e
             missing_generator = Mar(

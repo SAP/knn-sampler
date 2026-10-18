@@ -102,6 +102,13 @@ class TestRateValidationAndEquality(unittest.TestCase):
         self.assertNotEqual(Mar(0.5, 1.5, Rate(0.3)), Mcar(Rate(0.3)))
         self.assertEqual(hash(Mar(0.5, 1.5, Rate(0.3))), hash(Mar(0.5, 1.5, Rate(0.3))))
 
+    def test_negative_missing_values_rejected(self):
+        """Negative counts used to fail later with an opaque numpy error."""
+        with self.assertRaises(ValueError):
+            Mcar(-5)
+        with self.assertRaises(ValueError):
+            Mar(0.5, 1.5, -5)
+
 
 class TestSeededReproducibility(unittest.TestCase):
     def test_data_generator_reproducible_with_seed(self):

@@ -72,10 +72,8 @@ warn_return_any = true
 module = [
     "benchmark_all",
     "benchmark_knnsampler",
-    "rubin_variance",
     "src.imputation_plot",
     "src.imputation.knnxkde",
-    "src.imputation.knnxkdeimputer",
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false

@@ -9,6 +9,11 @@ except ImportError:
 
 CallableReturnType = TypeVar("CallableReturnType")
 
+# Anchored to the project root so the default does not depend on the CWD
+DEFAULT_DUMP_PATH = (
+    Path(__file__).resolve().parents[2] / "assets/profiling/profiling_results.pkl"
+)
+
 
 class Profiler:
     def __init__(self, functions_to_profile: list[Callable]) -> None:
@@ -42,9 +47,7 @@ class Profiler:
                     self.line_profiler.print_stats(stream=file)
         return self
 
-    def dump_stats(
-        self, path: Path = Path("assets/profiling/profiling_results.pkl")
-    ) -> Self:
+    def dump_stats(self, path: Path = DEFAULT_DUMP_PATH) -> Self:
         if self.line_profiler is not None:
             self.line_profiler.dump_stats(str(path))
         return self

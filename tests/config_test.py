@@ -184,11 +184,8 @@ class TestLoadConfigErrors:
             load_from_conf(tmp_path, conf)
 
     def test_mar_chunk_fields_required(self, tmp_path):
-        conf = (
-            base_conf()
-            .replace("missing_type = MCAR", "missing_type = MAR")
-            .replace("MAR_chunk_start = 0.4\n", "")
-        )
+        # base_conf's [gen] section defines no MAR_chunk_start/MAR_chunk_end
+        conf = base_conf().replace("missing_type = MCAR", "missing_type = MAR")
         with pytest.raises(ValueError, match="MAR_chunk_start"):
             load_from_conf(tmp_path, conf)
 

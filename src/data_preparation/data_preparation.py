@@ -80,6 +80,11 @@ class Mcar(MissingDataGenerator):
         random_state: int | None = None,
     ) -> None:
         super().__init__()
+        if isinstance(missing_values, int) and missing_values < 0:
+            raise ValueError(
+                f"missing_values should be a non-negative integer or a Rate,"
+                f" got '{missing_values}'"
+            )
         self.missing_values = missing_values
         self.random_state = random_state
 
@@ -139,6 +144,11 @@ class Mar(MissingDataGenerator):
         random_state: int | None = None,
     ) -> None:
         super().__init__()
+        if isinstance(missing_values, int) and missing_values < 0:
+            raise ValueError(
+                f"missing_values should be a non-negative integer or a Rate,"
+                f" got '{missing_values}'"
+            )
         self.chunk_start = chunk_start
         self.chunk_end = chunk_end
         self.missing_values = missing_values
