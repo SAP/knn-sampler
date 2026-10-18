@@ -1,6 +1,6 @@
 import pandas as pd
 
-from assets.config import load_config
+import assets.config as conf
 from assets.profiling.line_profile import Profiler
 from src.imputation import (
     Imputer,
@@ -9,7 +9,7 @@ from src.utils import do_imputation, do_plot_results, instantiate_imputers
 
 
 def main() -> None:
-    config = load_config()
+    config = conf
     prepared_data, actual_values = config.prepare_data_from_config()
     imputers = instantiate_imputers(
         config.imputers,

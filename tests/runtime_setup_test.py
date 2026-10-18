@@ -41,6 +41,7 @@ import pandas
 with patch.object(configparser.ConfigParser, 'read', side_effect=AssertionError('import read config')), \
      patch.object(pandas, 'read_excel', side_effect=AssertionError('import read data')):
     import assets.config as config
+    import main
     from assets.config import Config, load_config, get_field
     legacy = {'imputers', 'plot_results', 'profile', 'print_profile_stats',
               'profile_dump_path', 'data_preparator', 'missing_values'}

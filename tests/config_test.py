@@ -1,13 +1,21 @@
+import importlib.util
 import re
+import sys
+from dataclasses import fields
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 
+import assets.config as configuration
 from assets.config import PROJECT_ROOT, Config, load_config
 from src.data_preparation.data_preparation import (
     DataGenerator,
     DataPreparator,
+    Mar,
     Mcar,
+    NoAdditionalMissingValues,
     Rate,
     split_random_state,
 )
@@ -26,6 +34,97 @@ KNOWN_IMPUTERS = {
     RandomForestImputer,
     KNNxKDEImputer,
 }
+
+
+@pytest.mark.parametrize("mechanism", ["MCAR", "MAR"])
+@pytest.mark.parametrize("dataset_type", ["generated", "excel"])
+def test_config_splits_seed_and_replays_data(tmp_path, mechanism, dataset_type):
+    conf = base_conf(extra="random_state = 42\nMAR_chunk_start = -1\nMAR_chunk_end = 1")
+    conf = conf.replace("missing_type = MCAR", f"missing_type = {mechanism}")
+    if dataset_type == "excel":
+        source = tmp_path / "source.xlsx"
+        pd.DataFrame({"X": np.linspace(-2, 2, 120), "Y": range(120)}).to_excel(
+            source, index=False
+        )
+        conf = conf.replace("type = generated", "type = excel")
+        conf += f"\npath = {source}\nsheet = Sheet1\ninput = X\ntarget = Y\n"
+    config = load_from_conf(tmp_path, conf)
+    preparator = config.data_preparator
+    assert isinstance(preparator.missing_generator, (Mcar, Mar))
+    assert preparator.random_state != preparator.missing_generator.random_state
+    first = preparator.prepare_data()
+    mask = preparator.missing_indexes.copy()
+    second = preparator.prepare_data()
+    pd.testing.assert_frame_equal(first.df, second.df)
+    np.testing.assert_array_equal(mask, preparator.missing_indexes)
+    replay = load_from_conf(tmp_path, conf).data_preparator.prepare_data()
+    pd.testing.assert_frame_equal(first.df, replay.df)
+    changed = load_from_conf(
+        tmp_path, conf.replace("random_state = 42", "random_state = 43")
+    )
+    assert not first.df.equals(changed.data_preparator.prepare_data().df)
+
+
+def test_legacy_config_loads_lazily_once_and_honors_replacement(monkeypatch):
+    # Load a fresh module to avoid polluting the configuration used by other tests.
+    name = "assets._legacy_config_test"
+    spec = importlib.util.spec_from_file_location(name, configuration.__file__)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    with monkeypatch.context() as context:
+        context.setattr(
+            configuration.configparser.ConfigParser,
+            "read",
+            lambda *a, **k: pytest.fail("import read config"),
+        )
+        spec.loader.exec_module(module)
+    assert not any(field.name in vars(module) for field in fields(configuration.Config))
+    with pytest.raises(AttributeError):
+        _ = module.unknown_option
+    calls = []
+    original = module.load_config
+
+    def load():
+        calls.append(True)
+        return original()
+
+    monkeypatch.setattr(module, "load_config", load)
+    explicit = module.load_config()
+    assert "imputers" not in vars(module)
+    first_imputers = module.imputers
+    assert first_imputers
+    assert module.imputers is first_imputers
+    assert len(calls) == 2  # explicit call and one lazy load
+    assert all(field.name in vars(module) for field in fields(configuration.Config))
+    assert module.get_field(fields={"present": 3}, field_name="present") == 3
+    assert module.get_field({}, "missing") is None
+    assert module.mar_chunk == {}
+    replacement = DataGenerator(1, 10, NoAdditionalMissingValues(), random_state=43)
+    module.__dict__["data_preparator"] = replacement
+    prepared, actual = module.prepare_data_from_config()
+    assert actual is replacement.actual_values
+    pd.testing.assert_frame_equal(prepared.df, replacement.prepare_data().df)
+    assert explicit.data_preparator is not replacement
+    assert len(calls) == 2
+
+
+def test_legacy_lazy_load_preserves_early_overrides(monkeypatch):
+    name = "assets._early_legacy_config_test"
+    spec = importlib.util.spec_from_file_location(name, configuration.__file__)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    spec.loader.exec_module(module)
+    replacement = DataGenerator(1, 10, NoAdditionalMissingValues(), random_state=42)
+    module.__dict__["data_preparator"] = replacement
+    module.__dict__["plot_results"] = False
+    assert module.imputers
+    assert module.data_preparator is replacement
+    assert module.plot_results is False
+    prepared, _actual = module.prepare_data_from_config()
+    assert len(prepared.df) == 10
+
 
 BASE_CONF_TEMPLATE = """
 [imputation_algorithms]
