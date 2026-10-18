@@ -298,7 +298,6 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
                     *self.columns_to_keep,
                 ],
             )
-            self.sample_size = len(df)
         else:
             df = pd.read_excel(
                 io=self.dataset_descriptor.path,

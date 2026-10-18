@@ -17,13 +17,17 @@ import benchmark_knnsampler as coverage
 from assets.profiling.line_profile import Profiler
 from src.data_preparation.data_preparation import (
     DataGenerator,
+    ExcelDataPreparator,
     Mar,
     Mcar,
     NoAdditionalMissingValues,
     Rate,
     split_random_state,
 )
-from src.data_preparation.dataset_description import DatasetDescriptor
+from src.data_preparation.dataset_description import (
+    DatasetDescriptor,
+    ExcelDatasetDescriptor,
+)
 from src.imputation import KnnImputer, LinearImputer
 from tests.config_test import base_conf, load_from_conf, profile_conf
 
@@ -297,7 +301,8 @@ def test_benchmark_keeps_configured_missingness_seed_without_override(monkeypatc
     assert configured.random_state == 123
 
 
-def test_profile_dump_creates_parent_from_config(tmp_path):
+@pytest.mark.parametrize("as_string", [False, True])
+def test_profile_dump_creates_parent_from_config(tmp_path, as_string):
     pytest.importorskip("line_profiler")
     destination = tmp_path / "new" / "nested" / "stats.pkl"
     config = load_from_conf(tmp_path, profile_conf(f'dump_path = "{destination}"'))
@@ -306,10 +311,91 @@ def test_profile_dump_creates_parent_from_config(tmp_path):
     profiler = Profiler([])
     assert profiler.line_profiler is not None
     assert profiler.start_profile(lambda: 7) == 7
-    assert profiler.dump_stats(config.profile_dump_path) is profiler
+    path = str(config.profile_dump_path) if as_string else config.profile_dump_path
+    assert profiler.dump_stats(path) is profiler
     assert destination.stat().st_size > 0
-    profiler.dump_stats(config.profile_dump_path)
+    profiler.dump_stats(path)
+    blocked_parent = tmp_path / "not_a_directory"
+    blocked_parent.write_text("file", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        profiler.dump_stats(blocked_parent / "stats.pkl")
     absent = tmp_path / "disabled" / "stats.pkl"
     profiler.line_profiler = None
-    profiler.dump_stats(absent)
+    assert profiler.dump_stats(str(absent) if as_string else absent) is profiler
     assert not absent.parent.exists()
+
+
+@pytest.mark.parametrize("sample_size", [None, 4, 8])
+@pytest.mark.parametrize("mechanism", ["MCAR", "MAR"])
+def test_excel_replays_duplicate_x_with_requested_size(
+    tmp_path, sample_size, mechanism
+):
+    source = tmp_path / "duplicates.xlsx"
+    pd.DataFrame({"input": [1.0] * 8, "target": range(8)}).to_excel(source, index=False)
+    preparation, missingness = split_random_state(42)
+
+    def build():
+        missing = (
+            Mcar(2, random_state=missingness)
+            if mechanism == "MCAR"
+            else Mar(0, 2, 2, random_state=missingness)
+        )
+        return ExcelDataPreparator(
+            ExcelDatasetDescriptor("input", "target", str(source), "Sheet1"),
+            missing,
+            sample_size=sample_size,
+            random_state=preparation,
+        )
+
+    preparator = build()
+    first = preparator.prepare_data().df
+    actual = preparator.actual_values.copy()
+    indexes = preparator.missing_indexes.copy()
+    for current in (preparator, build()):
+        repeated = current.prepare_data().df
+        pd.testing.assert_frame_equal(first, repeated)
+        pd.testing.assert_series_equal(actual, current.actual_values)
+        np.testing.assert_array_equal(indexes, current.missing_indexes)
+        pd.testing.assert_series_equal(first.Y.isna(), repeated.Y.isna())
+        assert current.sample_size == sample_size
+
+
+def test_excel_all_rows_never_samples_even_without_seed(tmp_path, monkeypatch):
+    source = tmp_path / "all.xlsx"
+    pd.DataFrame({"X": [1.0, 1.0], "Y": [2.0, 3.0]}).to_excel(source, index=False)
+    preparator = ExcelDataPreparator(
+        ExcelDatasetDescriptor("X", "Y", str(source), "Sheet1"),
+        NoAdditionalMissingValues(),
+    )
+    monkeypatch.setattr(
+        pd.DataFrame,
+        "sample",
+        lambda *a, **k: pytest.fail("all rows must not be sampled"),
+    )
+    pd.testing.assert_frame_equal(
+        preparator.prepare_data().df, preparator.prepare_data().df
+    )
+    assert preparator.sample_size is None
+
+
+def test_main_reports_observed_size_for_all_rows(tmp_path, monkeypatch):
+    import main as entrypoint
+
+    source = tmp_path / "all.xlsx"
+    pd.DataFrame({"X": [1.0, 1.0], "Y": [2.0, 3.0]}).to_excel(source, index=False)
+    config = load_from_conf(
+        tmp_path, base_conf(imputers="LinearImputer"), hyperparameters=""
+    )
+    config.plot_results = True
+    config.data_preparator = ExcelDataPreparator(
+        ExcelDatasetDescriptor("X", "Y", str(source), "Sheet1"),
+        NoAdditionalMissingValues(),
+    )
+    monkeypatch.setattr(entrypoint, "load_config", lambda: config)
+    monkeypatch.setattr(entrypoint, "do_imputation", lambda *a, **k: {})
+    sizes = []
+    monkeypatch.setattr(
+        entrypoint, "do_plot_results", lambda *a, **k: sizes.append(k["sample_size"])
+    )
+    entrypoint.main()
+    assert sizes == [2]

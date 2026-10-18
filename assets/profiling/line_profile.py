@@ -47,8 +47,9 @@ class Profiler:
                     self.line_profiler.print_stats(stream=file)
         return self
 
-    def dump_stats(self, path: Path = DEFAULT_DUMP_PATH) -> Self:
+    def dump_stats(self, path: str | Path = DEFAULT_DUMP_PATH) -> Self:
         if self.line_profiler is not None:
+            path = Path(path)
             path.parent.mkdir(parents=True, exist_ok=True)
             self.line_profiler.dump_stats(str(path))
         return self

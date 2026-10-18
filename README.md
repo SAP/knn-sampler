@@ -139,6 +139,9 @@ poetry run task typecheck
 poetry run pre-commit install
 ```
 
+The local mypy hook uses the Poetry environment. It is skipped only on
+pre-commit.ci, where Poetry is unavailable; GitHub Actions runs the full typecheck.
+
 ## Security / Disclosure
 
 If you find a bug that may pose a security issue, follow our [security policy](https://github.com/SAP/knn-sampler/security/policy) instructions to report it. Do not open GitHub issues for security reports.

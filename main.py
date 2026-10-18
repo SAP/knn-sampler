@@ -33,7 +33,7 @@ def main() -> None:
             config.missing_values,
             prepared_data,
             actual_values,
-            sample_size=config.data_preparator.sample_size,
+            sample_size=len(prepared_data.df),
         )
 
 
