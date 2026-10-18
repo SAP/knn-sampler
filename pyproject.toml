@@ -48,6 +48,10 @@ lint = "ruff check --diff . && ruff format --check --diff ."
 select = ["E", "W", "F", "ASYNC", "S", "B", "A", "Q", "RUF", "I"]
 ignore = ["E501"] # ignore line too long
 
+[tool.ruff.lint.per-file-ignores]
+# Plain asserts are the repo's testing convention for pytest-style tests
+"tests/*" = ["S101"]
+
 [tool.pytest.ini_options]
 pythonpath = "."
 

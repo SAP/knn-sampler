@@ -1,7 +1,7 @@
 import inspect
 import time
 from collections import defaultdict
-from typing import Any, Generator, Literal, Union, overload
+from typing import Any, Generator, Literal, Mapping, Union, overload
 
 import pandas as pd
 from tqdm import tqdm, trange
@@ -64,7 +64,7 @@ plot_original = False
 
 
 def do_plot_results(
-    results: dict[Imputer, tuple[pd.DataFrame, Union[float, None]]],
+    results: Mapping[Imputer, tuple[pd.DataFrame, Union[float, None]]],
     missing_values: Union[int, Rate],
     data: DataFrameMLData,
     actual_values: pd.Series,
