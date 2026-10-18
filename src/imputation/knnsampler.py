@@ -500,6 +500,11 @@ class KnnSampler(UncertaintyImputer):
             If training data is empty or scaling fails.
         """
         nona_sets = self.ml_data.nona_sets()
+        if nona_sets.x.empty:
+            raise ValueError(
+                "No complete-case training rows: cannot fit the imputer"
+                " (check the missing rate or the dataset)"
+            )
         if self.optimal_k is None:
             if self.optimal_k_method == "kfold":
                 self.optimal_k = self.find_optimal_k_kfold(nona_sets)

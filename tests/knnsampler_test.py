@@ -78,6 +78,16 @@ class TestOptimalKSelection(unittest.TestCase):
         sampler.fit()
         self.assertIn(sampler.optimal_k, {1, 2})
 
+    def test_fit_with_empty_training_data_raises(self):
+        """A dataset with no complete target row must raise a clear
+        ValueError, not an obscure scikit-learn error."""
+        sampler = KnnSampler(
+            make_ml_data(total_size=10, complete_size=0),
+            compute_bounds=False,
+        )
+        with self.assertRaisesRegex(ValueError, "complete-case training rows"):
+            sampler.fit()
+
 
 if __name__ == "__main__":
     unittest.main()

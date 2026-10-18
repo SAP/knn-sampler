@@ -94,6 +94,10 @@ class Mcar(MissingDataGenerator):
             if isinstance(self.missing_values, Rate)
             else self.missing_values
         )
+        if size > len(df.index):
+            raise ValueError(
+                f"missing_values ({size}) exceeds dataset size ({len(df.index)})"
+            )
         rng = np.random.default_rng(self.random_state)
         missing_indexes = rng.choice(df.index.to_numpy(), size=size, replace=False)
         actual_values = df.loc[missing_indexes, "Y"].copy()
@@ -223,7 +227,8 @@ class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
     random_state : int | None
         Seed for the stochastic steps of data preparation (row sampling,
         synthetic-data generation); None yields nondeterministic draws.
-        Missing-data generators carry their own random_state.
+        Missing-data generators carry their own random_state, drawn from
+        an independent stream.
     """
 
     def __init__(

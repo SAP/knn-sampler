@@ -109,6 +109,13 @@ class TestRateValidationAndEquality(unittest.TestCase):
         with self.assertRaises(ValueError):
             Mar(0.5, 1.5, -5)
 
+    def test_mcar_missing_values_overflow_rejected(self):
+        """An absolute count larger than the dataset must raise a clear
+        error instead of an opaque numpy one."""
+        df = pd.DataFrame({"X": range(10), "Y": range(10)})
+        with self.assertRaisesRegex(ValueError, "exceeds dataset size"):
+            Mcar(500).create_missing_data(df)
+
 
 class TestSeededReproducibility(unittest.TestCase):
     def test_data_generator_reproducible_with_seed(self):
