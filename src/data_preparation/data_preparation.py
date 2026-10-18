@@ -20,18 +20,24 @@ DT = TypeVar("DT", bound=DatasetDescriptor)
 class Rate:
     def __init__(self, nb: float) -> None:
         if not 0 <= nb <= 1:
-            raise Exception("Rate should be between 0 and 1")
+            raise ValueError("Rate should be between 0 and 1")
         self._nb = nb
 
     @property
-    def nb(self):
+    def nb(self) -> float:
         return self._nb
 
     @nb.setter
-    def nb(self, nb: float):
+    def nb(self, nb: float) -> None:
         if not 0 <= nb <= 1:
-            raise Exception("Rate should be between 0 and 1")
+            raise ValueError("Rate should be between 0 and 1")
         self._nb = nb
+
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, Rate) and self._nb == value._nb
+
+    def __hash__(self) -> int:
+        return hash((Rate, self._nb))
 
     def __str__(self) -> str:
         return f"rate of {self.nb}"
@@ -40,7 +46,7 @@ class Rate:
 class MissingDataGenerator(ABC):
     @abstractmethod
     def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
-        pass
+        raise NotImplementedError
 
 
 @dataclass
@@ -55,7 +61,6 @@ class NoAdditionalMissingValues(MissingDataGenerator):
         return np.array([]), pd.Series()
 
 
-@dataclass
 class Mcar(MissingDataGenerator):
     def __init__(self, missing_values: Union[int, Rate]) -> None:
         super().__init__()
@@ -79,13 +84,12 @@ class Mcar(MissingDataGenerator):
         return "MCAR"
 
     def __eq__(self, value: object) -> bool:
-        return isinstance(value, Mcar)
+        return isinstance(value, Mcar) and (self.missing_values == value.missing_values)
 
     def __hash__(self) -> int:
-        return hash(Mcar)
+        return hash((Mcar, self.missing_values))
 
 
-@dataclass
 class Mar(MissingDataGenerator):
     def __init__(
         self, chunk_start: float, chunk_end: float, missing_values: Union[int, Rate]
@@ -95,7 +99,7 @@ class Mar(MissingDataGenerator):
         self.chunk_end = chunk_end
         self.missing_values = missing_values
 
-    def create_missing_data(self, df: pd.DataFrame):
+    def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
         chunk_indexes = df[
             (df["X"] > self.chunk_start) & (df["X"] < self.chunk_end)
         ].index
@@ -125,13 +129,14 @@ class Mar(MissingDataGenerator):
         return f"MAR : chunk start = {self.chunk_start}, chunk end = {self.chunk_end}"
 
     def __eq__(self, value: object) -> bool:
-        return isinstance(value, Mar) and (value.chunk_start, value.chunk_end) == (
+        return isinstance(value, Mar) and (
             self.chunk_start,
             self.chunk_end,
-        )
+            self.missing_values,
+        ) == (value.chunk_start, value.chunk_end, value.missing_values)
 
     def __hash__(self) -> int:
-        return hash((self.chunk_start, self.chunk_end))
+        return hash((Mar, self.chunk_start, self.chunk_end, self.missing_values))
 
 
 class DataPreparator(ABC, Generic[MLT, DT]):
