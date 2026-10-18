@@ -64,7 +64,14 @@ def plot_all_in_one(
         }
     )
 
-    fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(20, 16))
+    if not all_data:
+        return
+    fig, axes = plt.subplots(
+        nrows=len(all_data),
+        ncols=len(upper_percentiles),
+        figsize=(20, 4 * len(all_data)),
+        squeeze=False,
+    )
     offset_unit = 0.05
     spacing_factor = 0.2
 
@@ -117,7 +124,7 @@ def plot_all_in_one(
             if col_j == 0:
                 ax.set_ylabel("Coverage Probability")
 
-            if row_i < 3:
+            if row_i < len(all_data) - 1:
                 ax.set_xticks([])
                 ax.set_xticklabels([])
                 ax.set_xlabel("")
@@ -139,7 +146,15 @@ def plot_all_in_one(
     plt.show()
 
 
-type CoverageProbabilityKey = tuple[Geometry, MissingDataGenerator]
+type MechanismKey = tuple[type[MissingDataGenerator], float | None, float | None]
+type CoverageProbabilityKey = tuple[Geometry, MechanismKey]
+
+
+def mechanism_key(mechanism: MissingDataGenerator) -> MechanismKey:
+    """Snapshot mechanism identity, excluding rate/count and realization seed."""
+    if isinstance(mechanism, Mar):
+        return type(mechanism), mechanism.chunk_start, mechanism.chunk_end
+    return type(mechanism), None, None
 
 
 def process_combination(args: IterativeMetric):
@@ -182,14 +197,15 @@ def transform_results(results: list[SingleResult]):
     groupedByGeoAndMissing: dict[
         CoverageProbabilityKey, list[tuple[float, int, float, int, float]]
     ] = defaultdict(list)
+    representatives: dict[CoverageProbabilityKey, MissingDataGenerator] = {}
 
     for geometry, missing_type, up, size, rate, it, cp in results:
-        groupedByGeoAndMissing[(geometry, missing_type)].append(
-            (up, size, rate, it, cp)
-        )
+        key = geometry, mechanism_key(missing_type)
+        representatives.setdefault(key, missing_type)
+        groupedByGeoAndMissing[key].append((up, size, rate, it, cp))
 
-    for (geometry, missing_type), metrics in groupedByGeoAndMissing.items():
-        mean_list, std_list = result[(geometry, missing_type)]
+    for key, metrics in groupedByGeoAndMissing.items():
+        mean_list, std_list = result[key]
         for up in upper_percentiles:
             relevant_metrics = [m[1:] for m in metrics if m[0] == up]
             df = pd.DataFrame(
@@ -214,7 +230,8 @@ def transform_results(results: list[SingleResult]):
             mean_list.append(mean_df)
             std_list.append(std_df)
 
-    return [(*k, *v) for k, v in result.items()]
+    # Keep the historical output structure and human-readable plot labels.
+    return [(key[0], representatives[key], *value) for key, value in result.items()]
 
 
 def main():

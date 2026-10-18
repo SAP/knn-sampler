@@ -49,5 +49,6 @@ class Profiler:
 
     def dump_stats(self, path: Path = DEFAULT_DUMP_PATH) -> Self:
         if self.line_profiler is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
             self.line_profiler.dump_stats(str(path))
         return self

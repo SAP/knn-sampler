@@ -17,6 +17,17 @@ GeometryType = Literal["linear", "ring"]
 GEOMETRY_TYPES: tuple[GeometryType, ...] = ("linear", "ring")
 
 
+def split_random_state(random_state: int | None) -> tuple[int | None, int | None]:
+    """Derive replayable preparation/missingness seeds from separate child streams.
+
+    Child seeds fit uint32 for pandas sampling. None keeps both steps unseeded.
+    """
+    if random_state is None:
+        return None, None
+    preparation, missingness = np.random.SeedSequence(random_state).spawn(2)
+    return int(preparation.generate_state(1)[0]), int(missingness.generate_state(1)[0])
+
+
 class Rate:
     def __init__(self, nb: float) -> None:
         if not 0 <= nb <= 1:
@@ -37,7 +48,8 @@ class Rate:
         return isinstance(value, Rate) and self._nb == value._nb
 
     def __hash__(self) -> int:
-        return hash((Rate, self._nb))
+        # Value equality is mutable: the hash must not depend on nb.
+        return hash(Rate)
 
     def __str__(self) -> str:
         return f"rate of {self.nb}"
@@ -70,7 +82,7 @@ class Mcar(MissingDataGenerator):
         Absolute number of missing values or missing rate in [0, 1].
     random_state : int | None
         Seed for reproducible missing-value selection. Each call to
-        create_missing_data draws an independent stream seeded with it;
+        create_missing_data replays the stream seeded with it;
         None yields nondeterministic draws.
     """
 
@@ -117,7 +129,7 @@ class Mcar(MissingDataGenerator):
         )
 
     def __hash__(self) -> int:
-        return hash((Mcar, self.missing_values, self.random_state))
+        return hash(Mcar)
 
 
 class Mar(MissingDataGenerator):
@@ -136,7 +148,7 @@ class Mar(MissingDataGenerator):
         Absolute number of missing values or missing rate in [0, 1].
     random_state : int | None
         Seed for reproducible missing-value selection. Each call to
-        create_missing_data draws an independent stream seeded with it;
+        create_missing_data replays the stream seeded with it;
         None yields nondeterministic draws.
     """
 
@@ -202,15 +214,7 @@ class Mar(MissingDataGenerator):
         )
 
     def __hash__(self) -> int:
-        return hash(
-            (
-                Mar,
-                self.chunk_start,
-                self.chunk_end,
-                self.missing_values,
-                self.random_state,
-            )
-        )
+        return hash(Mar)
 
 
 class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
@@ -227,8 +231,8 @@ class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
     random_state : int | None
         Seed for the stochastic steps of data preparation (row sampling,
         synthetic-data generation); None yields nondeterministic draws.
-        Missing-data generators carry their own random_state, drawn from
-        an independent stream.
+        Missing-data generators carry their own random_state. Orchestration
+        must derive separate seeds with split_random_state when seeding both.
     """
 
     def __init__(
@@ -245,6 +249,15 @@ class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
 
         self.missing_indexes: np.ndarray
         self.actual_values: pd.Series
+
+    @property
+    def missing_type(self) -> MissingDataGenerator:
+        """Compatibility alias for missing_generator."""
+        return self.missing_generator
+
+    @missing_type.setter
+    def missing_type(self, value: MissingDataGenerator) -> None:
+        self.missing_generator = value
 
     @abstractmethod
     def prepare_data(self) -> MLT:
@@ -331,7 +344,7 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         Shape of the generated distribution.
     random_state : int | None
         Seed for reproducible synthetic-data generation; each call to
-        prepare_data draws an independent stream seeded with it. None
+        prepare_data replays the stream seeded with it. None
         yields nondeterministic draws.
     """
 
@@ -341,6 +354,9 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         sample_size: int,
         missing_generator: MissingDataGenerator,
         geometry_type: GeometryType = "linear",
+        dataset_descriptor: DatasetDescriptor | None = None,
+        excel_path: str | None = None,
+        *,
         random_state: int | None = None,
     ):
         if geometry_type not in GEOMETRY_TYPES:
@@ -349,13 +365,18 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
                 f" got '{geometry_type}'"
             )
         super().__init__(
-            dataset_descriptor=DatasetDescriptor("X", "Y"),
+            dataset_descriptor=(
+                DatasetDescriptor("X", "Y")
+                if dataset_descriptor is None
+                else dataset_descriptor
+            ),
             missing_generator=missing_generator,
             sample_size=sample_size,
             random_state=random_state,
         )
         self.linear_interpolation_ratio = linear_interpolation_ratio
         self.geometry_type: GeometryType = geometry_type
+        self.excel_path = excel_path
         # Narrow the sample_size attribute to int: DataGenerator requires an
         # explicit sample size, unlike ExcelDataPreparator which accepts None.
         self.sample_size: int

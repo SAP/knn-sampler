@@ -8,6 +8,7 @@ from src.data_preparation.data_preparation import (
     DataPreparator,
     Mcar,
     Rate,
+    split_random_state,
 )
 from src.imputation import (
     KnnImputer,
@@ -281,9 +282,11 @@ class TestDatasetFields:
         conf = base_conf(extra="random_state = 42")
         config = load_from_conf(tmp_path, conf)
         assert isinstance(config.data_preparator, DataGenerator)
-        assert config.data_preparator.random_state == 42
+        preparation_seed, missingness_seed = split_random_state(42)
+        assert config.data_preparator.random_state == preparation_seed
         assert isinstance(config.data_preparator.missing_generator, Mcar)
-        assert config.data_preparator.missing_generator.random_state == 42
+        assert config.data_preparator.missing_generator.random_state == missingness_seed
+        assert preparation_seed != missingness_seed
 
     def test_blank_random_state_is_none(self, tmp_path):
         conf = base_conf(extra="random_state =")

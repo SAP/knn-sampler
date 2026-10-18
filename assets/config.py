@@ -1,7 +1,7 @@
 import configparser
 import warnings
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -17,6 +17,7 @@ from src.data_preparation.data_preparation import (
     Mcar,
     MissingDataGenerator,
     Rate,
+    split_random_state,
 )
 from src.data_preparation.dataset_description import ExcelDatasetDescriptor
 from src.imputation import (
@@ -43,6 +44,14 @@ _used_imputers: list[type[Imputer]] = [
 _str_to_imputer: dict[str, type[Imputer]] = {
     imp.__name__: imp for imp in _used_imputers
 }
+
+# Compatibility names do not trigger configuration I/O on module import.
+mar_chunk: dict[str, float | None] = {}
+
+
+def get_field(fields: Mapping[str, Any], field_name: str) -> Any:
+    """Return a legacy configuration field, or None if absent."""
+    return fields.get(field_name)
 
 
 @dataclass
@@ -83,12 +92,33 @@ class Config:
         tuple[DataFrameMLData, pd.Series]
             Prepared ML data and the actual values of the removed entries.
         """
-        print(
-            f"preparing data with {type(self.data_preparator).__name__}: \n"
-            f"{self.data_preparator}\n"
-        )
-        prepared_data = self.data_preparator.prepare_data()
-        return prepared_data, self.data_preparator.actual_values
+        return _prepare_data(self.data_preparator)
+
+
+def _prepare_data(preparator: DataPreparator) -> tuple[DataFrameMLData, pd.Series]:
+    """Shared execution path for explicit and legacy configurations."""
+    print(f"preparing data with {type(preparator).__name__}: \n{preparator}\n")
+    prepared = preparator.prepare_data()
+    return prepared, preparator.actual_values
+
+
+def __getattr__(name: str) -> Any:
+    """Load historical module-level configuration attributes on first access."""
+    if name not in {field.name for field in fields(Config)}:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    if name not in globals():
+        for field_name, value in vars(load_config()).items():
+            globals().setdefault(field_name, value)
+    return globals()[name]
+
+
+def prepare_data_from_config() -> tuple[DataFrameMLData, pd.Series]:
+    """Prepare data using the lazy legacy module configuration.
+
+    Honor callers replacing the public data_preparator attribute.
+    """
+    preparator = cast(DataPreparator, __getattr__("data_preparator"))
+    return _prepare_data(preparator)
 
 
 def _strip_quotes(value: str) -> str:
@@ -169,12 +199,14 @@ def _extract_data_preparator(
     """Build the data preparator described by a dataset config section."""
     sample_size = _parse_sample_size(fields, name)
     missing_values = _parse_missing_values(fields, name)
-    random_state = _parse_random_state(fields, name)
+    preparation_seed, missingness_seed = split_random_state(
+        _parse_random_state(fields, name)
+    )
 
     missing_generator: MissingDataGenerator
     match fields.get("missing_type"):
         case "MCAR":
-            missing_generator = Mcar(missing_values, random_state=random_state)
+            missing_generator = Mcar(missing_values, random_state=missingness_seed)
         case "MAR":
             try:
                 chunk_start = float(fields["MAR_chunk_start"])
@@ -188,7 +220,7 @@ def _extract_data_preparator(
                 chunk_start,
                 chunk_end,
                 missing_values=missing_values,
-                random_state=random_state,
+                random_state=missingness_seed,
             )
         case _:
             raise ValueError(f"missing type is not defined for dataset {name}")
@@ -206,7 +238,7 @@ def _extract_data_preparator(
                 # geometry_type is a free-form string here; DataGenerator's
                 # constructor rejects values outside GEOMETRY_TYPES.
                 geometry_type=cast(GeometryType, fields.get("geometry_type", "linear")),
-                random_state=random_state,
+                random_state=preparation_seed,
             ), missing_values
         case "excel":
             return ExcelDataPreparator(
@@ -218,7 +250,7 @@ def _extract_data_preparator(
                 ),
                 sample_size=sample_size,
                 missing_generator=missing_generator,
-                random_state=random_state,
+                random_state=preparation_seed,
             ), missing_values
 
     raise ValueError(
