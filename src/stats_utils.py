@@ -1,4 +1,4 @@
-from typing import Callable, Sequence, Union
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -178,7 +178,7 @@ def multivariate_energy_distance(
 
 
 def permutation_test(
-    Z: Union[pd.DataFrame, np.ndarray],
+    Z: pd.DataFrame | np.ndarray,
     n_permutations: int,
     *,
     n_A: int | None = None,

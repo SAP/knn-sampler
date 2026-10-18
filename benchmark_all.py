@@ -2,10 +2,11 @@ import math
 import time
 import typing
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
-from typing import Literal, Mapping
+from typing import Literal
 
 import numpy as np
 import pandas as pd

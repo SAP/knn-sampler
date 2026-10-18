@@ -1,7 +1,8 @@
 import inspect
 import time
 from collections import defaultdict
-from typing import Any, Generator, Literal, Mapping, Union, overload
+from collections.abc import Generator, Mapping
+from typing import Any, Literal, overload
 
 import pandas as pd
 from tqdm import tqdm, trange
@@ -27,11 +28,11 @@ def do_imputation(
 
 
 def do_imputation(
-    *imputers: Imputer, iterations: Union[int, None] = None
-) -> Union[
-    dict[Imputer, tuple[pd.DataFrame, float]],
-    dict[Imputer, list[tuple[pd.DataFrame, float]]],
-]:
+    *imputers: Imputer, iterations: int | None = None
+) -> (
+    dict[Imputer, tuple[pd.DataFrame, float]]
+    | dict[Imputer, list[tuple[pd.DataFrame, float]]]
+):
     """
     Gives imputation results for all given imputers, for each iterations <br>
     returns -> dict[Imputer, list[tuple[pd.DataFrame, float]]] if iterations is set <br>
@@ -61,12 +62,12 @@ def do_imputation(
 
 
 def do_plot_results(
-    results: Mapping[Imputer, tuple[pd.DataFrame, Union[float, None]]],
-    missing_values: Union[int, Rate],
+    results: Mapping[Imputer, tuple[pd.DataFrame, float | None]],
+    missing_values: int | Rate,
     data: DataFrameMLData,
     actual_values: pd.Series,
     block: bool = True,
-    sample_size: Union[int, None] = None,
+    sample_size: int | None = None,
 ) -> None:
     """Plot imputation results for each imputer.
 

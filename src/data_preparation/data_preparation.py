@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Literal, TypeVar, Union
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -12,9 +12,6 @@ from src.data_preparation.dataset_description import (
     DatasetDescriptor,
     ExcelDatasetDescriptor,
 )
-
-MLT = TypeVar("MLT")
-DT = TypeVar("DT", bound=DatasetDescriptor)
 
 GeometryType = Literal["linear", "ring"]
 GEOMETRY_TYPES: tuple[GeometryType, ...] = ("linear", "ring")
@@ -79,8 +76,8 @@ class Mcar(MissingDataGenerator):
 
     def __init__(
         self,
-        missing_values: Union[int, Rate],
-        random_state: Union[int, None] = None,
+        missing_values: int | Rate,
+        random_state: int | None = None,
     ) -> None:
         super().__init__()
         self.missing_values = missing_values
@@ -138,8 +135,8 @@ class Mar(MissingDataGenerator):
         self,
         chunk_start: float,
         chunk_end: float,
-        missing_values: Union[int, Rate],
-        random_state: Union[int, None] = None,
+        missing_values: int | Rate,
+        random_state: int | None = None,
     ) -> None:
         super().__init__()
         self.chunk_start = chunk_start
@@ -202,7 +199,7 @@ class Mar(MissingDataGenerator):
         )
 
 
-class DataPreparator(ABC, Generic[MLT, DT]):
+class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
     """Base class for data preparators.
 
     Parameters
@@ -223,8 +220,8 @@ class DataPreparator(ABC, Generic[MLT, DT]):
         self,
         dataset_descriptor: DT,
         missing_generator: MissingDataGenerator,
-        sample_size: Union[int, None],
-        random_state: Union[int, None] = None,
+        sample_size: int | None,
+        random_state: int | None = None,
     ):
         self.dataset_descriptor = dataset_descriptor
         self.missing_type = missing_generator
@@ -251,9 +248,9 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         self,
         dataset_descriptor: ExcelDatasetDescriptor,
         missing_generator: MissingDataGenerator,
-        sample_size: Union[int, None] = None,
-        columns_to_keep: Union[list[str], None] = None,
-        random_state: Union[int, None] = None,
+        sample_size: int | None = None,
+        columns_to_keep: list[str] | None = None,
+        random_state: int | None = None,
     ):
         super().__init__(
             dataset_descriptor=dataset_descriptor,
@@ -329,7 +326,7 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         sample_size: int,
         missing_generator: MissingDataGenerator,
         geometry_type: GeometryType = "linear",
-        random_state: Union[int, None] = None,
+        random_state: int | None = None,
     ):
         if geometry_type not in GEOMETRY_TYPES:
             raise ValueError(

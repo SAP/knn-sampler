@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Self, TypeVar
+from typing import Self, TypeVar
 
 try:
     from line_profiler import LineProfiler
