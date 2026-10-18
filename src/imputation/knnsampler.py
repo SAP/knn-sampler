@@ -300,8 +300,8 @@ class KnnSampler(UncertaintyImputer):
 
         Parameters
         ----------
-        n_samples : int
-            Total number of rows in the dataset used for k search.
+        n_samples: int
+            Number of complete-case training rows available for k search.
 
         Returns
         -------
@@ -341,7 +341,7 @@ class KnnSampler(UncertaintyImputer):
         int
             Optimal number of neighbors (>=1).
         """
-        n_samples = len(self.ml_data.df)
+        n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
         min_k, max_k = self._get_k_bounds(n_samples)
@@ -435,9 +435,10 @@ class KnnSampler(UncertaintyImputer):
         -------
         int
             k minimizing mean CV MSE (>=1). Falls back to penalized LOO when
-            sample count < number of folds.
+            the number of complete-case training rows is smaller than the
+            number of folds.
         """
-        n_samples = len(self.ml_data.df)
+        n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
 
