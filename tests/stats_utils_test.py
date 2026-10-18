@@ -1,12 +1,61 @@
 import unittest
 
 import numpy as np
+import pytest
 
 from src.stats_utils import (
     calculate_p_value,
     multivariate_energy_distance,
     permutation_test,
 )
+
+
+@pytest.mark.parametrize("unbiased", [False, True])
+def test_energy_distance_preserves_extended_precision(unbiased):
+    if np.finfo(np.longdouble).nmant < 54:
+        pytest.skip("longdouble does not provide enough extra mantissa precision")
+    q = np.longdouble(2) ** 54 + 1
+    a = np.array([[0], [q]], dtype=np.longdouble)
+    b = np.array([[q], [2 * q]], dtype=np.longdouble) if unbiased else a
+    # Both estimators are exactly zero for these specific configurations.
+    for threshold in (8, 10**12):
+        assert (
+            multivariate_energy_distance(
+                a, b, unbiased=unbiased, chunk_threshold=threshold
+            )
+            == 0.0
+        )
+
+
+def test_energy_distance_preserves_extended_exponent_range():
+    if np.finfo(np.longdouble).maxexp < 2052:
+        pytest.skip("longdouble cannot represent the squared distances in this test")
+    a = np.array([[0], [np.longdouble("4e308")]], dtype=np.longdouble)
+    for threshold in (8, 10**12):
+        assert (
+            multivariate_energy_distance(
+                a, a, unbiased=False, chunk_threshold=threshold
+            )
+            == 0.0
+        )
+
+
+@pytest.mark.parametrize("dtype", [np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("unbiased", [False, True])
+def test_energy_distance_common_dtypes_agree_with_reference(dtype, unbiased):
+    a = np.array([[0, 0], [1, 2], [3, 4]], dtype=dtype)
+    b = np.array([[1, 0], [2, 2], [4, 3]], dtype=dtype)
+    a64, b64 = a.astype(np.float64), b.astype(np.float64)
+    cross = np.linalg.norm(a64[:, None] - b64[None, :], axis=-1).mean()
+    intra_a = np.linalg.norm(a64[:, None] - a64[None, :], axis=-1).sum()
+    intra_b = np.linalg.norm(b64[:, None] - b64[None, :], axis=-1).sum()
+    denominator = 6 if unbiased else 9
+    expected = 2 * cross - (intra_a + intra_b) / denominator
+    for threshold in (8, 10**12):
+        actual = multivariate_energy_distance(
+            a, b, unbiased=unbiased, chunk_threshold=threshold
+        )
+        assert actual == pytest.approx(expected, abs=2e-6, rel=1e-6)
 
 
 class TestStatsUtils(unittest.TestCase):

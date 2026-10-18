@@ -207,10 +207,24 @@ class TestDumpPath:
         config = load_from_conf(tmp_path, conf)
         assert config.profile_dump_path == PROJECT_ROOT / "assets/profiling/out.pkl"
 
-    def test_empty_dump_path_is_none(self, tmp_path):
-        conf = profile_conf("dump_path =")
+    @pytest.mark.parametrize("raw", ["", "   ", '""', "''", '"   "', "'   '"])
+    def test_empty_dump_path_is_none(self, tmp_path, raw):
+        conf = profile_conf(f"dump_path = {raw}")
         config = load_from_conf(tmp_path, conf)
         assert config.profile_dump_path is None
+
+    @pytest.mark.parametrize(
+        "raw, filename",
+        [
+            ('"  stats.pkl  "', "  stats.pkl  "),
+            ("'\"stats.pkl\"'", '"stats.pkl"'),
+        ],
+    )
+    def test_dump_path_preserves_quoted_filename_characters(
+        self, tmp_path, raw, filename
+    ):
+        config = load_from_conf(tmp_path, profile_conf(f"dump_path = {raw}"))
+        assert config.profile_dump_path == PROJECT_ROOT / filename
 
     def test_omitted_dump_path_is_none(self, tmp_path):
         conf = profile_conf("")

@@ -95,6 +95,21 @@ class Config:
         return _prepare_data(self.data_preparator)
 
 
+_LEGACY_CONFIG_NAMES = tuple(field.name for field in fields(Config))
+
+__all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_HYPERPARAMETERS_PATH",
+    "PROJECT_ROOT",
+    "Config",
+    "get_field",
+    "load_config",
+    "mar_chunk",
+    "prepare_data_from_config",
+    *_LEGACY_CONFIG_NAMES,
+]
+
+
 def _prepare_data(preparator: DataPreparator) -> tuple[DataFrameMLData, pd.Series]:
     """Shared execution path for explicit and legacy configurations."""
     print(f"preparing data with {type(preparator).__name__}: \n{preparator}\n")
@@ -104,7 +119,7 @@ def _prepare_data(preparator: DataPreparator) -> tuple[DataFrameMLData, pd.Serie
 
 def __getattr__(name: str) -> Any:
     """Load historical module-level configuration attributes on first access."""
-    if name not in {field.name for field in fields(Config)}:
+    if name not in _LEGACY_CONFIG_NAMES:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     if name not in globals():
         for field_name, value in vars(load_config()).items():
@@ -322,7 +337,9 @@ def load_config(
     profile = conf["profile"]["profile"] == "True"
     raw_dump_path = conf["profile"].get("dump_path", "").strip()
     # The file does not have to exist: dump_stats creates it on demand.
-    profile_dump_path = _resolve_path(raw_dump_path) if raw_dump_path else None
+    profile_dump_path = (
+        _resolve_path(raw_dump_path) if _strip_quotes(raw_dump_path).strip() else None
+    )
     print_profile_stats = conf["profile"].get("print_stats") == "True"
     used_dataset_config = conf["dataset_selection"]["used_dataset"]
     try:

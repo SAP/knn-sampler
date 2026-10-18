@@ -268,9 +268,11 @@ def benchmark_for_seed(
         np.random.seed(seed)
     # Keep legacy global seeding for algorithms that still consume it;
     # dataset preparation uses a distinct spawned child for each preparation.
-    preparation_seeds = np.random.SeedSequence(seed)
+    preparation_seeds = np.random.SeedSequence(seed) if seed is not None else None
 
-    def next_preparation_seed() -> int:
+    def next_preparation_seed() -> int | None:
+        if preparation_seeds is None:
+            return None
         return int(preparation_seeds.spawn(1)[0].generate_state(1)[0])
 
     rmse_values = defaultdict(list)

@@ -63,6 +63,8 @@ Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.c
 For Python callers, `assets.config.load_config()` returns an explicit configuration.
 Historical module attributes and `prepare_data_from_config()` remain available;
 their default configuration is loaded on first access, not on module import.
+`from assets.config import *` exports these values and loads the default
+configuration once; a plain `import assets.config` performs no configuration I/O.
 
 `DataGenerator` retains its `dataset_descriptor` and `excel_path` constructor
 arguments (`excel_path` is stored only; it does not write a workbook).
@@ -86,6 +88,8 @@ For comparing imputation algorithms with each other.
 `benchmark_for_seed(seed)` derives a new child seed for each prepared dataset.
 The same seed replays the preparation sequence under either regeneration policy;
 it does not guarantee identical stochastic imputation, permutation tests or timings.
+Without a root seed, preparation remains unseeded and the configured missingness
+seed is retained.
 
 ```shell
 poetry run task benchmark_all
