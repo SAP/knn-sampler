@@ -180,17 +180,21 @@ def _parse_missing_values(fields: configparser.SectionProxy, name: str) -> Rate 
 
 
 def _parse_random_state(fields: configparser.SectionProxy, name: str) -> int | None:
-    """Parse the optional random_state option (blank or absent means None)."""
+    """Parse a non-negative random_state (blank or absent means None)."""
     raw = fields.get("random_state")
     if raw is None or raw.strip() == "":
         return None
+    message = (
+        f"random_state should be a non-negative integer or left blank, got '{raw}'"
+        f" for dataset {name}"
+    )
     try:
-        return int(raw)
+        random_state = int(raw)
     except ValueError as e:
-        raise ValueError(
-            f"random_state should be an integer or left blank, got '{raw}'"
-            f" for dataset {name}"
-        ) from e
+        raise ValueError(message) from e
+    if random_state < 0:
+        raise ValueError(message)
+    return random_state
 
 
 def _extract_data_preparator(

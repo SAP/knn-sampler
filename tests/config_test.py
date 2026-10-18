@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -278,24 +279,32 @@ n_neighbors = 5 : int
 
 
 class TestDatasetFields:
-    def test_random_state_plumbed_to_preparator(self, tmp_path):
-        conf = base_conf(extra="random_state = 42")
+    @pytest.mark.parametrize("seed", [0, 42, 2**128])
+    def test_random_state_plumbed_to_preparator(self, tmp_path, seed):
+        conf = base_conf(extra=f"random_state = {seed}")
         config = load_from_conf(tmp_path, conf)
         assert isinstance(config.data_preparator, DataGenerator)
-        preparation_seed, missingness_seed = split_random_state(42)
+        preparation_seed, missingness_seed = split_random_state(seed)
         assert config.data_preparator.random_state == preparation_seed
         assert isinstance(config.data_preparator.missing_generator, Mcar)
         assert config.data_preparator.missing_generator.random_state == missingness_seed
         assert preparation_seed != missingness_seed
 
-    def test_blank_random_state_is_none(self, tmp_path):
-        conf = base_conf(extra="random_state =")
+    @pytest.mark.parametrize("option", ["", "random_state ="])
+    def test_blank_random_state_is_none(self, tmp_path, option):
+        conf = base_conf(extra=option)
         config = load_from_conf(tmp_path, conf)
         assert config.data_preparator.random_state is None
+        assert isinstance(config.data_preparator.missing_generator, Mcar)
+        assert config.data_preparator.missing_generator.random_state is None
 
-    def test_invalid_random_state_raises(self, tmp_path):
-        conf = base_conf(extra="random_state = abc")
-        with pytest.raises(ValueError, match="random_state"):
+    @pytest.mark.parametrize("raw", ["-5", "abc"])
+    def test_invalid_random_state_raises(self, tmp_path, raw):
+        conf = base_conf(extra=f"random_state = {raw}")
+        with pytest.raises(
+            ValueError,
+            match=rf"random_state.*non-negative integer.*{re.escape(raw)}.*dataset gen\b",
+        ):
             load_from_conf(tmp_path, conf)
 
     def test_excel_path_anchored_to_project_root(self, tmp_path):
