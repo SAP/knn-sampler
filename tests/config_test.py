@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 import assets.config as configuration
-from assets.config import PROJECT_ROOT, Config, load_config
 from src.data_preparation.data_preparation import (
     DataGenerator,
     DataPreparator,
@@ -167,10 +166,10 @@ def load_from_conf(
     conf: str,
     hyperparameters: str | None = None,
     hyperparameters_path: Path | None = None,
-) -> Config:
+) -> configuration.Config:
     """Load a Config from a written config file, using minimal
     hyperparameters by default."""
-    return load_config(
+    return configuration.load_config(
         config_path=write_conf(tmp_path, conf),
         hyperparameters_path=(
             hyperparameters_path
@@ -218,8 +217,8 @@ missing_type = MCAR
 class TestLoadConfigDefaults:
     def test_load_default_config_structural(self):
         """Structural invariants only: config.conf is user-editable."""
-        config = load_config()
-        assert isinstance(config, Config)
+        config = configuration.load_config()
+        assert isinstance(config, configuration.Config)
         assert config.imputers
         assert set(config.imputers) <= KNOWN_IMPUTERS
         assert isinstance(config.data_preparator, DataPreparator)
@@ -234,14 +233,14 @@ class TestLoadConfigDefaults:
 class TestLoadConfigErrors:
     def test_missing_config_file_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError, match="config file not found"):
-            load_config(
+            configuration.load_config(
                 config_path=tmp_path / "does_not_exist.conf",
                 hyperparameters_path=SHIPPED_HYPERPARAMETERS,
             )
 
     def test_missing_hyperparameters_file_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError, match="hyperparameters file"):
-            load_config(
+            configuration.load_config(
                 config_path=write_conf(tmp_path, base_conf()),
                 hyperparameters_path=tmp_path / "does_not_exist.conf",
             )
@@ -304,7 +303,10 @@ class TestDumpPath:
     def test_relative_dump_path_anchored_to_project_root(self, tmp_path):
         conf = profile_conf("dump_path = assets/profiling/out.pkl")
         config = load_from_conf(tmp_path, conf)
-        assert config.profile_dump_path == PROJECT_ROOT / "assets/profiling/out.pkl"
+        assert (
+            config.profile_dump_path
+            == configuration.PROJECT_ROOT / "assets/profiling/out.pkl"
+        )
 
     @pytest.mark.parametrize("raw", ["", "   ", '""', "''", '"   "', "'   '"])
     def test_empty_dump_path_is_none(self, tmp_path, raw):
@@ -323,7 +325,7 @@ class TestDumpPath:
         self, tmp_path, raw, filename
     ):
         config = load_from_conf(tmp_path, profile_conf(f"dump_path = {raw}"))
-        assert config.profile_dump_path == PROJECT_ROOT / filename
+        assert config.profile_dump_path == configuration.PROJECT_ROOT / filename
 
     def test_omitted_dump_path_is_none(self, tmp_path):
         conf = profile_conf("")
@@ -443,5 +445,5 @@ missing_type = MCAR
         )
         config = load_from_conf(tmp_path, conf)
         assert config.data_preparator.dataset_descriptor.path == str(
-            PROJECT_ROOT / "assets/datasets/publishable_data.xlsx"
+            configuration.PROJECT_ROOT / "assets/datasets/publishable_data.xlsx"
         )

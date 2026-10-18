@@ -97,6 +97,11 @@ class Config:
 
 _LEGACY_CONFIG_NAMES = tuple(field.name for field in fields(Config))
 
+# reload() retains the module namespace; discard previously cached settings.
+for _legacy_name in _LEGACY_CONFIG_NAMES:
+    globals().pop(_legacy_name, None)
+del _legacy_name
+
 __all__ = [
     "DEFAULT_CONFIG_PATH",
     "DEFAULT_HYPERPARAMETERS_PATH",
