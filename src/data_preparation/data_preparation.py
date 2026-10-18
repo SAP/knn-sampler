@@ -29,6 +29,8 @@ def split_random_state(random_state: int | None) -> tuple[int | None, int | None
 
 
 class Rate:
+    """Missing-value fraction in [0, 1]. Do not mutate while used as a dict/set key."""
+
     def __init__(self, nb: float) -> None:
         if not 0 <= nb <= 1:
             raise ValueError("Rate should be between 0 and 1")
@@ -56,6 +58,8 @@ class Rate:
 
 
 class MissingDataGenerator(ABC):
+    """Inject missing values; do not mutate instances while used as dict/set keys."""
+
     @abstractmethod
     def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
         raise NotImplementedError
@@ -341,6 +345,10 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         Generator injecting missing values in the generated data.
     geometry_type : {'linear', 'ring'}
         Shape of the generated distribution.
+    dataset_descriptor : DatasetDescriptor | None
+        Column names for the generated data; defaults to X and Y.
+    excel_path : str | None
+        Stored for compatibility; does not write a workbook.
     random_state : int | None
         Seed for reproducible synthetic-data generation; each call to
         prepare_data replays the stream seeded with it. None

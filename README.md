@@ -60,22 +60,7 @@ poetry run task main
 
 Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
-For Python callers, `assets.config.load_config()` returns an explicit configuration.
-Historical module attributes and `prepare_data_from_config()` remain available;
-their default configuration is loaded on first access, not on module import.
-`from assets.config import *` exports these values and loads the default
-configuration once; a plain `import assets.config` performs no configuration I/O.
-
-`DataGenerator` retains its `dataset_descriptor` and `excel_path` constructor
-arguments (`excel_path` is stored only; it does not write a workbook).
-Preparators expose `missing_generator`; `missing_type` remains a read/write alias.
-When constructing seeded preparators directly, use `split_random_state()` from
-`src.data_preparation.data_preparation` to derive separate seeds for preparation
-and missing-value injection. Do not reuse the same seed for these two steps.
-
-`Rate`, `Mcar` and `Mar` retain mutable value equality and stable class-level hashes.
-Do not mutate keys so that distinct dictionary/set entries become equal; use
-immutable snapshots when aggregating by configuration or mechanism.
+For use from Python, load settings with `assets.config.load_config()`.
 
 ### Benchmark algorithms
 
@@ -85,11 +70,8 @@ Note: the benchmarking scripts do not have dedicated configuration files. To cha
 
 For comparing imputation algorithms with each other.
 
-`benchmark_for_seed(seed)` derives a new child seed for each prepared dataset.
-The same seed replays the preparation sequence under either regeneration policy;
-it does not guarantee identical stochastic imputation, permutation tests or timings.
-Without a root seed, preparation remains unseeded and the configured missingness
-seed is retained.
+A fixed benchmark seed reproduces the prepared datasets. Stochastic imputations,
+permutation tests and execution times may still vary.
 
 ```shell
 poetry run task benchmark_all
