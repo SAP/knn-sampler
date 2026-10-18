@@ -16,6 +16,9 @@ from src.data_preparation.dataset_description import (
 MLT = TypeVar("MLT")
 DT = TypeVar("DT", bound=DatasetDescriptor)
 
+GeometryType = Literal["linear", "ring"]
+GEOMETRY_TYPES: tuple[GeometryType, ...] = ("linear", "ring")
+
 
 class Rate:
     def __init__(self, nb: float) -> None:
@@ -62,9 +65,26 @@ class NoAdditionalMissingValues(MissingDataGenerator):
 
 
 class Mcar(MissingDataGenerator):
-    def __init__(self, missing_values: Union[int, Rate]) -> None:
+    """Missing Completely At Random missing-data generator.
+
+    Parameters
+    ----------
+    missing_values : int | Rate
+        Absolute number of missing values or missing rate in [0, 1].
+    random_state : int | None
+        Seed for reproducible missing-value selection. Each call to
+        create_missing_data draws an independent stream seeded with it;
+        None yields nondeterministic draws.
+    """
+
+    def __init__(
+        self,
+        missing_values: Union[int, Rate],
+        random_state: Union[int, None] = None,
+    ) -> None:
         super().__init__()
         self.missing_values = missing_values
+        self.random_state = random_state
 
     def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
         size = (
@@ -72,7 +92,8 @@ class Mcar(MissingDataGenerator):
             if isinstance(self.missing_values, Rate)
             else self.missing_values
         )
-        missing_indexes = np.random.choice(df.index, size=size, replace=False)
+        rng = np.random.default_rng(self.random_state)
+        missing_indexes = rng.choice(df.index.to_numpy(), size=size, replace=False)
         actual_values = df.loc[missing_indexes, "Y"].copy()
         df.loc[missing_indexes, "Y"] = np.nan
         return missing_indexes, actual_values
@@ -84,20 +105,47 @@ class Mcar(MissingDataGenerator):
         return "MCAR"
 
     def __eq__(self, value: object) -> bool:
-        return isinstance(value, Mcar) and (self.missing_values == value.missing_values)
+        return isinstance(value, Mcar) and (
+            self.missing_values == value.missing_values
+            and self.random_state == value.random_state
+        )
 
     def __hash__(self) -> int:
-        return hash((Mcar, self.missing_values))
+        return hash((Mcar, self.missing_values, self.random_state))
 
 
 class Mar(MissingDataGenerator):
+    """Missing At Random missing-data generator.
+
+    Missing values are drawn from the index range where X lies within
+    (chunk_start, chunk_end).
+
+    Parameters
+    ----------
+    chunk_start : float
+        Lower bound of the X range affected by missing values.
+    chunk_end : float
+        Upper bound of the X range affected by missing values.
+    missing_values : int | Rate
+        Absolute number of missing values or missing rate in [0, 1].
+    random_state : int | None
+        Seed for reproducible missing-value selection. Each call to
+        create_missing_data draws an independent stream seeded with it;
+        None yields nondeterministic draws.
+    """
+
     def __init__(
-        self, chunk_start: float, chunk_end: float, missing_values: Union[int, Rate]
+        self,
+        chunk_start: float,
+        chunk_end: float,
+        missing_values: Union[int, Rate],
+        random_state: Union[int, None] = None,
     ) -> None:
         super().__init__()
         self.chunk_start = chunk_start
         self.chunk_end = chunk_end
         self.missing_values = missing_values
+        self.random_state = random_state
 
     def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
         chunk_indexes = df[
@@ -113,8 +161,9 @@ class Mar(MissingDataGenerator):
         )
         if size == 0:
             return np.array([]), pd.Series()
-        missing_indexes = np.random.choice(
-            chunk_indexes,
+        rng = np.random.default_rng(self.random_state)
+        missing_indexes = rng.choice(
+            chunk_indexes.to_numpy(),
             size=size,
             replace=False,
         )
@@ -133,22 +182,54 @@ class Mar(MissingDataGenerator):
             self.chunk_start,
             self.chunk_end,
             self.missing_values,
-        ) == (value.chunk_start, value.chunk_end, value.missing_values)
+            self.random_state,
+        ) == (
+            value.chunk_start,
+            value.chunk_end,
+            value.missing_values,
+            value.random_state,
+        )
 
     def __hash__(self) -> int:
-        return hash((Mar, self.chunk_start, self.chunk_end, self.missing_values))
+        return hash(
+            (
+                Mar,
+                self.chunk_start,
+                self.chunk_end,
+                self.missing_values,
+                self.random_state,
+            )
+        )
 
 
 class DataPreparator(ABC, Generic[MLT, DT]):
+    """Base class for data preparators.
+
+    Parameters
+    ----------
+    dataset_descriptor : DT
+        Descriptor of the dataset to prepare.
+    missing_generator : MissingDataGenerator
+        Generator injecting missing values in the prepared data.
+    sample_size : int | None
+        Number of rows to use; None uses all available rows.
+    random_state : int | None
+        Seed for the stochastic steps of data preparation (row sampling,
+        synthetic-data generation); None yields nondeterministic draws.
+        Missing-data generators carry their own random_state.
+    """
+
     def __init__(
         self,
         dataset_descriptor: DT,
         missing_generator: MissingDataGenerator,
         sample_size: Union[int, None],
+        random_state: Union[int, None] = None,
     ):
         self.dataset_descriptor = dataset_descriptor
         self.missing_type = missing_generator
         self.sample_size = sample_size
+        self.random_state = random_state
 
         self.missing_indexes: np.ndarray
         self.actual_values: pd.Series
@@ -172,11 +253,13 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         missing_generator: MissingDataGenerator,
         sample_size: Union[int, None] = None,
         columns_to_keep: Union[list[str], None] = None,
+        random_state: Union[int, None] = None,
     ):
         super().__init__(
             dataset_descriptor=dataset_descriptor,
             missing_generator=missing_generator,
             sample_size=sample_size,
+            random_state=random_state,
         )
         self.columns_to_keep = columns_to_keep if columns_to_keep is not None else []
 
@@ -199,7 +282,7 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
                     self.dataset_descriptor.target_column,
                     *self.columns_to_keep,
                 ],
-            ).sample(self.sample_size)
+            ).sample(self.sample_size, random_state=self.random_state)
 
         # rename columns
         df = df.rename(
@@ -222,35 +305,57 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
 
 
 class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
+    """Synthetic data generator.
+
+    Parameters
+    ----------
+    linear_interpolation_ratio : float
+        Slope applied to X to build the linear geometry target.
+    sample_size : int
+        Number of generated rows.
+    missing_generator : MissingDataGenerator
+        Generator injecting missing values in the generated data.
+    geometry_type : {'linear', 'ring'}
+        Shape of the generated distribution.
+    random_state : int | None
+        Seed for reproducible synthetic-data generation; each call to
+        prepare_data draws an independent stream seeded with it. None
+        yields nondeterministic draws.
+    """
+
     def __init__(
         self,
         linear_interpolation_ratio: float,
         sample_size: int,
         missing_generator: MissingDataGenerator,
-        geometry_type: Literal["linear"] | Literal["ring"] = "linear",
-        dataset_descriptor=None,
-        excel_path: str | None = None,
+        geometry_type: GeometryType = "linear",
+        random_state: Union[int, None] = None,
     ):
+        if geometry_type not in GEOMETRY_TYPES:
+            raise ValueError(
+                f"geometry_type must be one of: {', '.join(repr(g) for g in GEOMETRY_TYPES)},"
+                f" got '{geometry_type}'"
+            )
         super().__init__(
-            dataset_descriptor=dataset_descriptor or DatasetDescriptor("X", "Y"),
+            dataset_descriptor=DatasetDescriptor("X", "Y"),
             missing_generator=missing_generator,
             sample_size=sample_size,
+            random_state=random_state,
         )
         self.linear_interpolation_ratio = linear_interpolation_ratio
-        self.geometry_type: Literal["linear"] | Literal["ring"] = geometry_type
-        self.sample_size: int
-        self.excel_path = excel_path
+        self.geometry_type: GeometryType = geometry_type
 
     def build_synthetic_data(self) -> pd.DataFrame:
+        rng = np.random.default_rng(self.random_state)
         match self.geometry_type:
             case "linear":
                 x = np.linspace(-2, 2, self.sample_size)
-                epsilon = np.random.chisquare(2, self.sample_size)
+                epsilon = rng.chisquare(2, self.sample_size)
                 y = self.linear_interpolation_ratio * x + epsilon
 
             case "ring":
                 theta = np.linspace(0, 2 * np.pi, self.sample_size)
-                epsilon = np.random.normal(0, 0.1, self.sample_size)
+                epsilon = rng.normal(0, 0.1, self.sample_size)
                 r = 1 + epsilon
                 x = np.cos(theta) * r
                 y = np.sin(theta) * r

@@ -1,8 +1,12 @@
 import unittest
+from typing import cast
+
+import pandas as pd
 
 from src.data_preparation.data_preparation import (
     DataGenerator,
     ExcelDataPreparator,
+    GeometryType,
     Mar,
     Mcar,
     Rate,
@@ -97,3 +101,77 @@ class TestRateValidationAndEquality(unittest.TestCase):
         self.assertNotEqual(Mar(0.5, 1.5, Rate(0.3)), Mar(0.5, 1.5, Rate(0.5)))
         self.assertNotEqual(Mar(0.5, 1.5, Rate(0.3)), Mcar(Rate(0.3)))
         self.assertEqual(hash(Mar(0.5, 1.5, Rate(0.3))), hash(Mar(0.5, 1.5, Rate(0.3))))
+
+
+class TestSeededReproducibility(unittest.TestCase):
+    def test_data_generator_reproducible_with_seed(self):
+        """Two freshly built seeded generators produce identical data."""
+
+        def build():
+            generator = DataGenerator(
+                linear_interpolation_ratio=1,
+                sample_size=200,
+                missing_generator=Mcar(Rate(0.3), random_state=42),
+                random_state=42,
+            )
+            return generator, generator.prepare_data()
+
+        generator1, data1 = build()
+        generator2, data2 = build()
+        pd.testing.assert_frame_equal(data1.df, data2.df)
+        self.assertEqual(
+            list(generator1.missing_indexes), list(generator2.missing_indexes)
+        )
+
+    def test_data_generator_repeated_prepare_is_deterministic(self):
+        """prepare_data is idempotent under a fixed seed (per-call seeding)."""
+        generator = DataGenerator(
+            linear_interpolation_ratio=1,
+            sample_size=200,
+            missing_generator=Mcar(Rate(0.3), random_state=42),
+            random_state=42,
+        )
+        first = generator.prepare_data()
+        first_missing = list(generator.missing_indexes)
+        second = generator.prepare_data()
+        self.assertEqual(first_missing, list(generator.missing_indexes))
+        pd.testing.assert_frame_equal(first.df, second.df)
+
+    def test_mar_reproducible_with_seed(self):
+        def build():
+            generator = DataGenerator(
+                linear_interpolation_ratio=1,
+                sample_size=200,
+                missing_generator=Mar(0.5, 1.5, Rate(0.3), random_state=42),
+                random_state=42,
+            )
+            return generator.prepare_data(), generator.actual_values
+
+        (_data1, actual1), (_data2, actual2) = build(), build()
+        pd.testing.assert_series_equal(actual1, actual2)
+
+    def test_excel_preparation_reproducible_with_seed(self):
+        def build():
+            preparator = ExcelDataPreparator(
+                dataset_descriptor=Datasets.PUBLICATION_DATASET,
+                sample_size=1000,
+                missing_generator=Mcar(Rate(0.3), random_state=42),
+                random_state=42,
+            )
+            return preparator.prepare_data(), preparator.actual_values
+
+        (data1, actual1), (data2, actual2) = build(), build()
+        pd.testing.assert_frame_equal(data1.df, data2.df)
+        pd.testing.assert_series_equal(actual1, actual2)
+
+
+class TestGeometryValidation(unittest.TestCase):
+    def test_invalid_geometry_type(self):
+        """Invalid geometry used to crash with UnboundLocalError at build time."""
+        with self.assertRaises(ValueError):
+            DataGenerator(
+                linear_interpolation_ratio=1,
+                sample_size=100,
+                missing_generator=Mcar(Rate(0.3)),
+                geometry_type=cast(GeometryType, "invalid"),
+            )
