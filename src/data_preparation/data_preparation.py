@@ -234,7 +234,7 @@ class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
         random_state: int | None = None,
     ):
         self.dataset_descriptor = dataset_descriptor
-        self.missing_type = missing_generator
+        self.missing_generator = missing_generator
         self.sample_size = sample_size
         self.random_state = random_state
 
@@ -248,7 +248,7 @@ class DataPreparator[MLT, DT: DatasetDescriptor](ABC):
     def __str__(self) -> str:
         return (
             f"{self.dataset_descriptor} \n"
-            f"\tmissing generator: {self.missing_type} \n"
+            f"\tmissing generator: {self.missing_generator} \n"
             f"\tsample size: {self.sample_size}"
         )
 
@@ -303,7 +303,7 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         df = df.sort_values(by="X").reset_index(drop=True)
 
         self.missing_indexes, self.actual_values = (
-            self.missing_type.create_missing_data(df)
+            self.missing_generator.create_missing_data(df)
         )
 
         return DataFrameMLData(
@@ -380,6 +380,6 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
     def prepare_data(self) -> DataFrameMLData:
         df = self.build_synthetic_data()
         self.missing_indexes, self.actual_values = (
-            self.missing_type.create_missing_data(df)
+            self.missing_generator.create_missing_data(df)
         )
         return DataFrameMLData(df, self.dataset_descriptor)

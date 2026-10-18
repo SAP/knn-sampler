@@ -282,8 +282,8 @@ class TestDatasetFields:
         config = load_from_conf(tmp_path, conf)
         assert isinstance(config.data_preparator, DataGenerator)
         assert config.data_preparator.random_state == 42
-        assert isinstance(config.data_preparator.missing_type, Mcar)
-        assert config.data_preparator.missing_type.random_state == 42
+        assert isinstance(config.data_preparator.missing_generator, Mcar)
+        assert config.data_preparator.missing_generator.random_state == 42
 
     def test_blank_random_state_is_none(self, tmp_path):
         conf = base_conf(extra="random_state =")
