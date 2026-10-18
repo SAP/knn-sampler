@@ -60,9 +60,6 @@ def do_imputation(
     return results
 
 
-plot_original = False
-
-
 def do_plot_results(
     results: Mapping[Imputer, tuple[pd.DataFrame, Union[float, None]]],
     missing_values: Union[int, Rate],
@@ -70,8 +67,14 @@ def do_plot_results(
     actual_values: pd.Series,
     block: bool = True,
     sample_size: Union[int, None] = None,
-):
-    global plot_original
+) -> None:
+    """Plot imputation results for each imputer.
+
+    The original-data figure is drawn once per call (for the first
+    imputer), then each imputer gets its original-vs-imputed comparison
+    plus uncertainty bounds when available; show() blocks only on the
+    last imputer's figures.
+    """
     items = results.items()
     for index, (imputer, (result, et)) in enumerate(items):
         context = ImputationContext.create_imputation_context(
@@ -83,10 +86,9 @@ def do_plot_results(
             sample_size,
             missing_values,
         )
-        if not plot_original:
+        if index == 0:
             imputation_plot.plot_original()
             # imputation_plot.plot_original_scatterplot()
-            plot_original = True
         imputation_plot.plot_original_imputed()
         # imputation_plot.plot_imputation_results()
         # imputation_plot.plot_imputed_accuracy()
