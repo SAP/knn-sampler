@@ -29,7 +29,7 @@ class DataFrameMLData[DDT: DatasetDescriptor]:
         ]
 
     @df.setter
-    def df(self, df: pd.DataFrame):
+    def df(self, df: pd.DataFrame) -> None:
         self.dataframe = df
 
     def get_ml_sets(self) -> MLSets:

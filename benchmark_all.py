@@ -208,7 +208,7 @@ def evaluate_imputers(
     }
 
     rmse_values: dict[Imputer, float] = {}
-    energy_distances: dict[Imputer, np.floating] = {}
+    energy_distances: dict[Imputer, float] = {}
     p_values: dict[Imputer, float] = {}
     execution_times: dict[Imputer, float] = {}
     for imputer, context in result_contexts.items():

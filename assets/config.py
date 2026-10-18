@@ -260,7 +260,7 @@ def load_config(
 
     imputer_conf = configparser.ConfigParser()
     # disable automatic option name lowering: hyperparameter names are case sensitive
-    imputer_conf.optionxform = lambda optionstr: optionstr  # type: ignore[assignment]
+    imputer_conf.optionxform = lambda optionstr: optionstr  # type: ignore[method-assign]
     if not imputer_conf.read(hyperparameters_path or DEFAULT_HYPERPARAMETERS_PATH):
         raise FileNotFoundError(
             "hyperparameters file not found or unreadable:"

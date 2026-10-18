@@ -101,12 +101,12 @@ class ImputationPlot:
         )
 
         x = np.array(self.plot_context.actual_data[self.descriptor.input_column])
-        lower_bounds = np.array(lower_bounds)
-        upper_bounds = np.array(upper_bounds)
+        lower_bounds_array = np.array(lower_bounds)
+        upper_bounds_array = np.array(upper_bounds)
         sort_idx = np.argsort(x)
         x_sorted = x[sort_idx]
-        lower_sorted = lower_bounds[sort_idx]
-        upper_sorted = upper_bounds[sort_idx]
+        lower_sorted = lower_bounds_array[sort_idx]
+        upper_sorted = upper_bounds_array[sort_idx]
 
         ax.scatter(
             self.plot_context.actual_data[self.descriptor.input_column],

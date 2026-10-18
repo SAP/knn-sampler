@@ -15,7 +15,7 @@ def rubin_variance(
     variances = np.zeros(m)
     for i, imputed_df in enumerate(imputed_dfs):
         means[i] = imputed_df.Y.mean()
-        variances[i] = imputed_df["Y"].var(ddof=1)  # type: ignore
+        variances[i] = imputed_df["Y"].var(ddof=1)
 
     # Within-imputation variance (mean of within-imputation variances)
     W = np.mean(variances)

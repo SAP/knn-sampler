@@ -341,6 +341,9 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
         )
         self.linear_interpolation_ratio = linear_interpolation_ratio
         self.geometry_type: GeometryType = geometry_type
+        # Narrow the sample_size attribute to int: DataGenerator requires an
+        # explicit sample size, unlike ExcelDataPreparator which accepts None.
+        self.sample_size: int
 
     def build_synthetic_data(self) -> pd.DataFrame:
         rng = np.random.default_rng(self.random_state)

@@ -106,9 +106,9 @@ def multivariate_energy_distance(
             if unbiased_flag and n_samples > 1:
                 # Exclude diagonal and use U-statistic
                 sum_dists = dists[np.triu_indices(n_samples, k=1)].sum()
-                return (2.0 / (n_samples * (n_samples - 1))) * sum_dists
+                return float((2.0 / (n_samples * (n_samples - 1))) * sum_dists)
             else:
-                return dists.mean()
+                return float(dists.mean())
 
         # For large samples, compute incrementally with proper blocking
         # Each block pair creates a (block_size x block_size x n_features) array

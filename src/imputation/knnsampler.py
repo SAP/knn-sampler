@@ -1,4 +1,4 @@
-from typing import Literal, overload
+from typing import Literal, cast, overload
 
 import numpy as np
 import pandas as pd
@@ -224,9 +224,9 @@ class KnnSampler(UncertaintyImputer):
             Scaled feature matrix according to scaling_optimal_k strategy.
         """
         if self.scaling_optimal_k == "standardization":
-            return StandardScaler().fit_transform(X)
+            return cast(np.ndarray, StandardScaler().fit_transform(X))
         if self.scaling_optimal_k == "normalization":
-            return MinMaxScaler().fit_transform(X)
+            return cast(np.ndarray, MinMaxScaler().fit_transform(X))
         return X.to_numpy()
 
     def _fit_scaler(self, X: pd.DataFrame) -> None:
@@ -267,7 +267,7 @@ class KnnSampler(UncertaintyImputer):
         """
         if self.scaler is None:
             return X.to_numpy()
-        return self.scaler.transform(X)
+        return cast(np.ndarray, self.scaler.transform(X))
 
     def _calculate_mse(self, y_true: pd.Series, y_pred: np.ndarray) -> float:
         """Calculate mean squared error between true and predicted values.
@@ -452,7 +452,7 @@ class KnnSampler(UncertaintyImputer):
             return self.find_optimal_k(train_sets)
 
         k_values = list(range(min_k, max_k + 1))
-        cv_scores = []
+        cv_scores: list[float] = []
 
         for k in k_values:
             fold_scores = []
@@ -479,7 +479,7 @@ class KnnSampler(UncertaintyImputer):
             # Calculate mean CV score, handling infinite values
             finite_scores = [s for s in fold_scores if np.isfinite(s)]
             if finite_scores:
-                cv_scores.append(np.mean(finite_scores))
+                cv_scores.append(float(np.mean(finite_scores)))
             else:
                 cv_scores.append(np.inf)
 
