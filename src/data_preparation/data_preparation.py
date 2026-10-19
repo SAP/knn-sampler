@@ -296,6 +296,7 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         if self.sample_size is None:
             df = pd.read_excel(
                 io=self.dataset_descriptor.path,
+                sheet_name=self.dataset_descriptor.sheet_name,
                 usecols=[
                     self.dataset_descriptor.input_column,
                     self.dataset_descriptor.target_column,
@@ -305,6 +306,7 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         else:
             df = pd.read_excel(
                 io=self.dataset_descriptor.path,
+                sheet_name=self.dataset_descriptor.sheet_name,
                 usecols=[
                     self.dataset_descriptor.input_column,
                     self.dataset_descriptor.target_column,
@@ -412,7 +414,25 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
 
     def prepare_data(self) -> DataFrameMLData:
         df = self.build_synthetic_data()
-        self.missing_indexes, self.actual_values = (
-            self.missing_generator.create_missing_data(df)
+        descriptor = self.dataset_descriptor
+        create_missing_data = self.missing_generator.create_missing_data
+        # Built-ins require X/Y; custom implementations keep descriptor names.
+        normalize_columns = (descriptor.input_column, descriptor.target_column) != (
+            "X",
+            "Y",
+        ) and getattr(create_missing_data, "__func__", None) in (
+            Mcar.create_missing_data,
+            Mar.create_missing_data,
         )
-        return DataFrameMLData(df, self.dataset_descriptor)
+        if normalize_columns:
+            df = df.rename(
+                columns={descriptor.input_column: "X", descriptor.target_column: "Y"}
+            )
+        self.missing_indexes, self.actual_values = create_missing_data(df)
+        if normalize_columns:
+            df = df.rename(
+                columns={"X": descriptor.input_column, "Y": descriptor.target_column}
+            )
+            if self.actual_values.name == "Y":
+                self.actual_values = self.actual_values.rename(descriptor.target_column)
+        return DataFrameMLData(df, descriptor)

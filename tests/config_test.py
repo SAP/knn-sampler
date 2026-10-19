@@ -35,6 +35,26 @@ KNOWN_IMPUTERS = {
 }
 
 
+@pytest.mark.parametrize("sample_size", ["", "4"])
+def test_config_selects_requested_excel_sheet(
+    tmp_path, multi_sheet_workbook, sample_size
+):
+    conf = (
+        base_conf(
+            extra=(
+                f'\npath = "{multi_sheet_workbook}"\nsheet = selected\ninput = input\ntarget = target\nrandom_state = 42'
+            )
+        )
+        .replace("type = generated", "type = excel")
+        .replace("sample_size = 100", f"sample_size = {sample_size}")
+    )
+    preparator = load_from_conf(tmp_path, conf).data_preparator
+    prepared = preparator.prepare_data().df
+    assert len(prepared) == (int(sample_size) if sample_size else 8)
+    assert prepared.Y.dropna().between(100, 107).all()
+    assert preparator.actual_values.between(100, 107).all()
+
+
 @pytest.mark.parametrize("mechanism", ["MCAR", "MAR"])
 @pytest.mark.parametrize("dataset_type", ["generated", "excel"])
 def test_config_splits_seed_and_replays_data(tmp_path, mechanism, dataset_type):

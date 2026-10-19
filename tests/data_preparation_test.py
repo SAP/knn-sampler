@@ -12,6 +12,7 @@ from src.data_preparation.data_preparation import (
     GeometryType,
     Mar,
     Mcar,
+    MissingDataGenerator,
     NoAdditionalMissingValues,
     Rate,
     split_random_state,
@@ -144,6 +145,162 @@ def test_excel_all_rows_never_samples_even_without_seed(tmp_path, monkeypatch):
         preparator.prepare_data().df, preparator.prepare_data().df
     )
     assert preparator.sample_size is None
+
+
+@pytest.mark.parametrize("sample_size", [None, 4])
+def test_excel_uses_requested_sheet_and_replays(multi_sheet_workbook, sample_size):
+    preparation, missingness = split_random_state(42)
+
+    def build():
+        return ExcelDataPreparator(
+            ExcelDatasetDescriptor(
+                "input", "target", str(multi_sheet_workbook), "selected"
+            ),
+            Mcar(Rate(0.3), random_state=missingness),
+            sample_size=sample_size,
+            columns_to_keep=["source"],
+            random_state=preparation,
+        )
+
+    preparator = build()
+    first = preparator.prepare_data().df
+    actual = preparator.actual_values.copy()
+    assert len(first) == (8 if sample_size is None else sample_size)
+    assert first["source"].eq("selected").all()
+    assert first["Y"].dropna().between(100, 107).all()
+    assert actual.between(100, 107).all()
+    for current in (preparator, build()):
+        pd.testing.assert_frame_equal(first, current.prepare_data().df)
+        pd.testing.assert_series_equal(actual, current.actual_values)
+        assert current.sample_size == sample_size
+
+
+@pytest.mark.parametrize("sample_size", [None, 4])
+def test_excel_rejects_missing_sheet(multi_sheet_workbook, sample_size):
+    preparator = ExcelDataPreparator(
+        ExcelDatasetDescriptor("input", "target", str(multi_sheet_workbook), "missing"),
+        NoAdditionalMissingValues(),
+        sample_size=sample_size,
+    )
+    with pytest.raises(ValueError, match="missing"):
+        preparator.prepare_data()
+
+
+@pytest.mark.parametrize("geometry", ["linear", "ring"])
+@pytest.mark.parametrize(
+    "columns", [("feature", "target"), ("Y", "X"), ("X", "target"), ("feature", "Y")]
+)
+@pytest.mark.parametrize(
+    "mechanism",
+    [
+        "mcar",
+        "mar",
+        "mcar_inherited",
+        "mar_inherited",
+        "mcar_zero",
+        "mar_empty",
+        "none",
+    ],
+)
+def test_generated_missingness_respects_descriptor(geometry, columns, mechanism):
+    class InheritedMcar(Mcar):
+        pass
+
+    class InheritedMar(Mar):
+        pass
+
+    preparation, missingness = split_random_state(42)
+    strategies = {
+        "mcar": Mcar(3, random_state=missingness),
+        "mar": Mar(-3, 3, Rate(0.25), random_state=missingness),
+        "mcar_inherited": InheritedMcar(3, random_state=missingness),
+        "mar_inherited": InheritedMar(-3, 3, Rate(0.25), random_state=missingness),
+        "mcar_zero": Mcar(0, random_state=missingness),
+        "mar_empty": Mar(3, 4, Rate(0.25), random_state=missingness),
+        "none": NoAdditionalMissingValues(),
+    }
+    descriptor = DatasetDescriptor(*columns)
+    generator = DataGenerator(
+        1, 32, strategies[mechanism], geometry, descriptor, random_state=preparation
+    )
+    original = generator.build_synthetic_data()
+    prepared = generator.prepare_data()
+    result = prepared.df
+    indexes = generator.missing_indexes.copy()
+    actual = generator.actual_values.copy()
+    assert prepared.dataset_descriptor is descriptor
+    assert list(result.columns) == list(columns)
+    pd.testing.assert_series_equal(result[columns[0]], original[columns[0]])
+    np.testing.assert_array_equal(
+        result.index[result[columns[1]].isna()].sort_values(), np.sort(indexes)
+    )
+    expected_count = {"mcar": 3, "mcar_inherited": 3, "mar": 8, "mar_inherited": 8}.get(
+        mechanism, 0
+    )
+    assert len(indexes) == expected_count
+    if len(indexes):
+        pd.testing.assert_series_equal(actual, original.loc[indexes, columns[1]])
+        result.loc[indexes, columns[1]] = actual
+    else:
+        assert actual.empty
+        assert actual.name == (columns[1] if mechanism == "mcar_zero" else None)
+    pd.testing.assert_frame_equal(result, original)
+    pd.testing.assert_frame_equal(generator.prepare_data().df, prepared.df)
+    pd.testing.assert_series_equal(generator.actual_values, actual)
+    assert (descriptor.input_column, descriptor.target_column) == columns
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "custom",
+        "subclass_override",
+        "subclass_override_mar",
+        "instance_override",
+        "instance_override_mar",
+    ],
+)
+def test_custom_missingness_keeps_original_columns(monkeypatch, kind):
+    calls = []
+
+    class RawColumnsMissingness(MissingDataGenerator):
+        def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
+            calls.append(list(df.columns))
+            indexes = df.index[:1].to_numpy()
+            actual = df.loc[indexes, "target"].copy()
+            df.loc[indexes, "target"] = np.nan
+            return indexes, actual
+
+    class CustomMcar(Mcar):
+        def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
+            return RawColumnsMissingness().create_missing_data(df)
+
+    class CustomMar(Mar):
+        def create_missing_data(self, df: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
+            return RawColumnsMissingness().create_missing_data(df)
+
+    custom = RawColumnsMissingness()
+    missing: MissingDataGenerator
+    if kind == "custom":
+        missing = custom
+    elif kind == "subclass_override":
+        missing = CustomMcar(1)
+    elif kind == "subclass_override_mar":
+        missing = CustomMar(-3, 3, 1)
+    else:
+        missing = Mar(-3, 3, 1) if kind == "instance_override_mar" else Mcar(1)
+        monkeypatch.setattr(missing, "create_missing_data", custom.create_missing_data)
+    descriptor = DatasetDescriptor("feature", "target")
+    generator = DataGenerator(
+        1, 10, missing, dataset_descriptor=descriptor, random_state=42
+    )
+    original = generator.build_synthetic_data()
+    result = generator.prepare_data().df
+    assert calls == [["feature", "target"]]
+    assert result.target.isna().sum() == 1
+    pd.testing.assert_series_equal(generator.actual_values, original.loc[[0], "target"])
+    result.loc[0, "target"] = generator.actual_values.iloc[0]
+    pd.testing.assert_frame_equal(result, original)
 
 
 class TestDataPreparation(unittest.TestCase):
