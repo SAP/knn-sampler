@@ -61,6 +61,10 @@ poetry run task main
 Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
 For use from Python, load settings with `assets.config.load_config()`.
+`np.random.seed()` does not control synthetic generation or MCAR/MAR selection;
+pass explicit `random_state` values instead. For direct Python construction,
+`split_random_state(seed)` from `src.data_preparation.data_preparation` supplies
+separate seeds for preparation and missing-value selection.
 
 ### Benchmark algorithms
 
