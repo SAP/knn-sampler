@@ -15,6 +15,7 @@ dependencies = [
     "pandas>=2",
     "seaborn>=0.13",
     "scikit-learn>=1",
+    "scipy>=1",
     "openpyxl>=3",
     "tabulate (>=0.10.0,<0.11.0)",
     "tqdm>=4",
@@ -34,6 +35,9 @@ ipykernel = "^7"
 
 # [tool.poetry]
 # package-mode = false
+mypy = "^2.4"
+pandas-stubs = "^3.0.5.260914"
+types-tqdm = "^4.70.0.20260906"
 
 [tool.taskipy.tasks]
 main = "poetry run python main.py"
@@ -42,10 +46,49 @@ benchmark_all = "poetry run python benchmark_all.py"
 benchmark_knnsampler = "poetry run python benchmark_knnsampler.py"
 format = "ruff check --fix . && ruff format ."
 lint = "ruff check --diff . && ruff format --check --diff ."
+typecheck = "poetry run mypy ."
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "ASYNC", "S", "B", "A", "Q", "RUF", "I"]
+select = ["E", "W", "F", "ASYNC", "S", "B", "A", "Q", "RUF", "I", "UP"]
 ignore = ["E501"] # ignore line too long
+
+[tool.ruff.lint.per-file-ignores]
+# Plain asserts are the repo's testing convention for pytest-style tests
+"tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+# Research scripts and legacy modules are not fully annotated (yet)
+module = [
+    "benchmark_all",
+    "benchmark_knnsampler",
+    "src.imputation_plot",
+    "src.imputation.knnxkde",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+# Tests are still checked (check_untyped_defs) but need not annotate every
+# TestCase method signature
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+# Third-party dependencies without type stubs
+module = ["seaborn.*", "sklearn.*", "scipy.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = "."

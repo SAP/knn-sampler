@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Union, overload
+from typing import Literal, cast, overload
 
 import numpy as np
 import pandas as pd
@@ -110,12 +110,12 @@ class KnnSampler(UncertaintyImputer):
         compute_bounds: Literal[False],
         lower_percentiles: None = None,
         upper_percentiles: None = None,
-        n_neighbors: Optional[int] = None,
+        n_neighbors: int | None = None,
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
-        optimal_k_random_state: Optional[int] = None,
+        optimal_k_random_state: int | None = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
@@ -128,12 +128,12 @@ class KnnSampler(UncertaintyImputer):
         compute_bounds: Literal[True],
         lower_percentiles: list[float],
         upper_percentiles: list[float],
-        n_neighbors: Optional[int] = None,
+        n_neighbors: int | None = None,
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
-        optimal_k_random_state: Optional[int] = None,
+        optimal_k_random_state: int | None = None,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
@@ -145,12 +145,12 @@ class KnnSampler(UncertaintyImputer):
         compute_bounds: bool,
         lower_percentiles: list[float] | None = None,
         upper_percentiles: list[float] | None = None,
-        n_neighbors: Optional[int] = None,
+        n_neighbors: int | None = None,
         strategy: ImputationStrategy = "sample",
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
-        optimal_k_random_state: Optional[int] = None,
+        optimal_k_random_state: int | None = None,
         optimal_k_cv_folds: int = DEFAULT_CV_FOLDS,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
@@ -184,18 +184,18 @@ class KnnSampler(UncertaintyImputer):
         )
         self.optimal_k: int | None = n_neighbors
         self.knn: KNeighborsRegressor | None = None
-        self.scaler: Union[StandardScaler, MinMaxScaler, None] = None
+        self.scaler: StandardScaler | MinMaxScaler | None = None
         self.strategy: ImputationStrategy = strategy
         self.algorithm: KNNAlgorithm = algorithm
         self.weights: KNNWeights = weights
         self.optimal_k_method: KOptimalMethod = optimal_k_method
-        self.optimal_k_random_state: Optional[int] = optimal_k_random_state
+        self.optimal_k_random_state: int | None = optimal_k_random_state
         self.optimal_k_cv_folds: int = optimal_k_cv_folds
         self.scaling_optimal_k: ScalingStrategy = scaling_optimal_k
         self.scaling_fit: ScalingStrategy = scaling_fit
         self._rng: np.random.Generator | None = None
 
-    def _init_rng(self, random_state: Optional[int] = None) -> None:
+    def _init_rng(self, random_state: int | None = None) -> None:
         """Initialize random number generator for sampling strategy.
 
         Parameters
@@ -224,9 +224,9 @@ class KnnSampler(UncertaintyImputer):
             Scaled feature matrix according to scaling_optimal_k strategy.
         """
         if self.scaling_optimal_k == "standardization":
-            return StandardScaler().fit_transform(X)
+            return cast(np.ndarray, StandardScaler().fit_transform(X))
         if self.scaling_optimal_k == "normalization":
-            return MinMaxScaler().fit_transform(X)
+            return cast(np.ndarray, MinMaxScaler().fit_transform(X))
         return X.to_numpy()
 
     def _fit_scaler(self, X: pd.DataFrame) -> None:
@@ -267,7 +267,7 @@ class KnnSampler(UncertaintyImputer):
         """
         if self.scaler is None:
             return X.to_numpy()
-        return self.scaler.transform(X)
+        return cast(np.ndarray, self.scaler.transform(X))
 
     def _calculate_mse(self, y_true: pd.Series, y_pred: np.ndarray) -> float:
         """Calculate mean squared error between true and predicted values.
@@ -300,8 +300,8 @@ class KnnSampler(UncertaintyImputer):
 
         Parameters
         ----------
-        n_samples : int
-            Total number of rows in the dataset used for k search.
+        n_samples: int
+            Number of complete-case training rows available for k search.
 
         Returns
         -------
@@ -341,7 +341,7 @@ class KnnSampler(UncertaintyImputer):
         int
             Optimal number of neighbors (>=1).
         """
-        n_samples = len(self.ml_data.df)
+        n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
         min_k, max_k = self._get_k_bounds(n_samples)
@@ -435,9 +435,10 @@ class KnnSampler(UncertaintyImputer):
         -------
         int
             k minimizing mean CV MSE (>=1). Falls back to penalized LOO when
-            sample count < number of folds.
+            the number of complete-case training rows is smaller than the
+            number of folds.
         """
-        n_samples = len(self.ml_data.df)
+        n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)
 
@@ -451,7 +452,7 @@ class KnnSampler(UncertaintyImputer):
             return self.find_optimal_k(train_sets)
 
         k_values = list(range(min_k, max_k + 1))
-        cv_scores = []
+        cv_scores: list[float] = []
 
         for k in k_values:
             fold_scores = []
@@ -478,7 +479,7 @@ class KnnSampler(UncertaintyImputer):
             # Calculate mean CV score, handling infinite values
             finite_scores = [s for s in fold_scores if np.isfinite(s)]
             if finite_scores:
-                cv_scores.append(np.mean(finite_scores))
+                cv_scores.append(float(np.mean(finite_scores)))
             else:
                 cv_scores.append(np.inf)
 
@@ -499,6 +500,11 @@ class KnnSampler(UncertaintyImputer):
             If training data is empty or scaling fails.
         """
         nona_sets = self.ml_data.nona_sets()
+        if nona_sets.x.empty:
+            raise ValueError(
+                "No complete-case training rows: cannot fit the imputer"
+                " (check the missing rate or the dataset)"
+            )
         if self.optimal_k is None:
             if self.optimal_k_method == "kfold":
                 self.optimal_k = self.find_optimal_k_kfold(nona_sets)
@@ -539,7 +545,7 @@ class KnnSampler(UncertaintyImputer):
         return imputed_df
 
     def impute_for_dataset(
-        self, df: pd.DataFrame, y_train: pd.Series, random_state: Optional[int] = None
+        self, df: pd.DataFrame, y_train: pd.Series, random_state: int | None = None
     ) -> tuple[pd.Series, BoundsPerPercentile]:
         """Impute missing target values and compute empirical bounds.
 

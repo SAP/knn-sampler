@@ -3,7 +3,6 @@ from typing import Literal
 
 import pandas as pd
 
-from main import do_plot_results
 from src.data_preparation.data_description import DataFrameMLData
 from src.data_preparation.data_preparation import (
     DataGenerator,
@@ -18,7 +17,7 @@ from src.imputation import (
     LinearImputer,
     RandomForestImputer,
 )
-from src.utils import do_imputation
+from src.utils import do_imputation, do_plot_results
 from tests.testutils import prepare_data_from_dataset, prepare_generated_data
 
 

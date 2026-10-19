@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Generic, TypeVar
 
 import pandas as pd
 
@@ -14,11 +13,7 @@ class MLSets:
     y: pd.Series
 
 
-# Dataset descriptor generic type
-DDT = TypeVar("DDT", bound=DatasetDescriptor)
-
-
-class DataFrameMLData(Generic[DDT]):
+class DataFrameMLData[DDT: DatasetDescriptor]:
     def __init__(self, df: pd.DataFrame, dataset_descriptor: DatasetDescriptor):
         self.dataframe = df
         self.dataset_descriptor: DatasetDescriptor = dataset_descriptor
@@ -34,7 +29,7 @@ class DataFrameMLData(Generic[DDT]):
         ]
 
     @df.setter
-    def df(self, df: pd.DataFrame):
+    def df(self, df: pd.DataFrame) -> None:
         self.dataframe = df
 
     def get_ml_sets(self) -> MLSets:

@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from src.data_preparation.data_description import DataFrameMLData, DatasetDescriptor
+from src.data_preparation.data_description import DataFrameMLData
+from src.data_preparation.dataset_description import DatasetDescriptor
 
 
 @dataclass

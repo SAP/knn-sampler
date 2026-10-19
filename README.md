@@ -60,6 +60,8 @@ poetry run task main
 
 Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
+For use from Python, load settings with `assets.config.load_config()`.
+
 ### Benchmark algorithms
 
 Note: the benchmarking scripts do not have dedicated configuration files. To change benchmark settings, edit the top of [benchmark_all.py](./benchmark_all.py) and [benchmark_knnsampler.py](./benchmark_knnsampler.py).
@@ -67,6 +69,9 @@ Note: the benchmarking scripts do not have dedicated configuration files. To cha
 #### Benchmark all algorithms
 
 For comparing imputation algorithms with each other.
+
+A fixed benchmark seed reproduces the prepared datasets. Stochastic imputations,
+permutation tests and execution times may still vary.
 
 ```shell
 poetry run task benchmark_all
@@ -106,6 +111,12 @@ poetry run task lint
 
 ```shell
 poetry run task test
+```
+
+### Static type checking
+
+```shell
+poetry run task typecheck
 ```
 
 ### Install code-quality Git hooks

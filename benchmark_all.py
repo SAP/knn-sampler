@@ -2,10 +2,12 @@ import math
 import time
 import typing
 from collections import defaultdict
+from collections.abc import Mapping
+from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
-from typing import Literal, Mapping
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -20,6 +22,7 @@ from src.data_preparation.data_preparation import (
     Mar,
     Mcar,
     Rate,
+    split_random_state,
 )
 from src.imputation import (
     KnnImputer,
@@ -172,14 +175,21 @@ def plot_aggregated_results_per_size(
     plt.show(block=block)
 
 
-def create_data_preparator(sample_size):
+def create_data_preparator(
+    sample_size: int, random_state: int | None = None
+) -> DataGenerator:
     # Use a synthetic ring data generator as in the reference code
     # Enable Excel round-trip to mimic the original script I/O behavior
+    preparation_seed, missingness_seed = split_random_state(random_state)
+    missing_generator = copy(config.missing_generator)
+    if random_state is not None:
+        missing_generator.random_state = missingness_seed
     return DataGenerator(
         linear_interpolation_ratio=1.0,
         sample_size=sample_size,
-        missing_generator=config.missing_generator,
+        missing_generator=missing_generator,
         geometry_type=benchmark_geometry_type,
+        random_state=preparation_seed,
     )
 
 
@@ -207,7 +217,7 @@ def evaluate_imputers(
     }
 
     rmse_values: dict[Imputer, float] = {}
-    energy_distances: dict[Imputer, np.floating] = {}
+    energy_distances: dict[Imputer, float] = {}
     p_values: dict[Imputer, float] = {}
     execution_times: dict[Imputer, float] = {}
     for imputer, context in result_contexts.items():
@@ -256,6 +266,14 @@ def benchmark_for_seed(
 ]:
     if seed is not None:
         np.random.seed(seed)
+    # Keep legacy global seeding for algorithms that still consume it;
+    # dataset preparation uses a distinct spawned child for each preparation.
+    preparation_seeds = np.random.SeedSequence(seed) if seed is not None else None
+
+    def next_preparation_seed() -> int | None:
+        if preparation_seeds is None:
+            return None
+        return int(preparation_seeds.spawn(1)[0].generate_state(1)[0])
 
     rmse_values = defaultdict(list)
     ed_values = defaultdict(list)
@@ -276,7 +294,9 @@ def benchmark_for_seed(
             )
             for imputer_cls, params in imputer_classes.items():
                 # Fresh dataset for this method
-                data_preparator = create_data_preparator(sample_size)
+                data_preparator = create_data_preparator(
+                    sample_size, next_preparation_seed()
+                )
                 prepared_data = data_preparator.prepare_data()
                 actual_values = data_preparator.actual_values
 
@@ -316,7 +336,9 @@ def benchmark_for_seed(
             )
         ):
             bar.set_description(f"executing for {sample_size = }")
-            data_preparator = create_data_preparator(sample_size)
+            data_preparator = create_data_preparator(
+                sample_size, next_preparation_seed()
+            )
             prepared_data = data_preparator.prepare_data()
             actual_values = data_preparator.actual_values
 

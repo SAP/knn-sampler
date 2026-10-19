@@ -1,5 +1,9 @@
 default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
+# pre-commit.ci does not provide Poetry. GitHub Actions runs the full typecheck;
+# the local hook remains enabled in the Poetry development environment.
+ci:
+  skip: [mypy]
 repos:
 
 - repo: https://github.com/jorisroovers/gitlint
@@ -34,11 +38,17 @@ repos:
       - id: debug-statements
       - id: check-docstring-first
 
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v2.4.0
+# mypy runs from the Poetry environment (not mirrors-mypy's isolated venv):
+# it needs the project's dependencies and stubs (numpy, pandas, pandas-stubs,
+# line_profiler) to type-check the codebase with the shared [tool.mypy] config.
+- repo: local
   hooks:
     - id: mypy
-      args: [--ignore-missing-imports, --check-untyped-defs, --explicit-package-bases]
+      name: mypy
+      entry: poetry run mypy
+      language: system
+      types: [python]
+      require_serial: true
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
   rev: v0.17.0

@@ -1,4 +1,5 @@
-from typing import Callable, Sequence, Union
+from collections.abc import Callable, Sequence
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -90,7 +91,7 @@ def multivariate_energy_distance(
         mean_cross_dists = total_sum / total_count
 
     # Intra distances
-    def compute_intra_mean(Z: np.ndarray, unbiased_flag: bool) -> float:
+    def compute_intra_mean(Z: np.ndarray, unbiased_flag: bool) -> float | np.floating:
         """Compute intra-sample mean distance with memory optimization.
 
         For unbiased=True, computes U-statistic estimator excluding diagonal.
@@ -106,9 +107,11 @@ def multivariate_energy_distance(
             if unbiased_flag and n_samples > 1:
                 # Exclude diagonal and use U-statistic
                 sum_dists = dists[np.triu_indices(n_samples, k=1)].sum()
-                return (2.0 / (n_samples * (n_samples - 1))) * sum_dists
+                return cast(
+                    np.floating, (2.0 / (n_samples * (n_samples - 1))) * sum_dists
+                )
             else:
-                return dists.mean()
+                return cast(np.floating, dists.mean())
 
         # For large samples, compute incrementally with proper blocking
         # Each block pair creates a (block_size x block_size x n_features) array
@@ -178,7 +181,7 @@ def multivariate_energy_distance(
 
 
 def permutation_test(
-    Z: Union[pd.DataFrame, np.ndarray],
+    Z: pd.DataFrame | np.ndarray,
     n_permutations: int,
     *,
     n_A: int | None = None,

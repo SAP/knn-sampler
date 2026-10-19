@@ -65,8 +65,8 @@ class KNNxKDEImputer(Imputer):
         data_matrix = np.column_stack(
             [
                 index_values,
-                df[input_col].values,
-                df[target_col].values,
+                df[input_col].to_numpy(),
+                df[target_col].to_numpy(),
             ]
         )
         samples = self.knnxkde.impute_samples(data_matrix)
