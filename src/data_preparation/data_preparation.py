@@ -21,6 +21,8 @@ def split_random_state(random_state: int | None) -> tuple[int | None, int | None
     """Derive replayable preparation/missingness seeds from separate child streams.
 
     Child seeds fit uint32 for pandas sampling. None keeps both steps unseeded.
+    Pass the returned seeds explicitly to preparation and missingness generators;
+    np.random.seed() does not control synthetic generation or MCAR/MAR selection.
     """
     if random_state is None:
         return None, None
