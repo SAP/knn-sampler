@@ -51,6 +51,7 @@ def test_main_honors_module_overrides(
             plot_results=plot,
             profile_dump_path=destination,
             print_profile_stats=print_stats,
+            execution_random_state=17,
         )
         configuration.__dict__.update(overrides)
         calls: dict[str, Any] = {}
@@ -99,7 +100,10 @@ def test_main_honors_module_overrides(
         )
         entrypoint.main()
         assert calls["prepared"].df.equals(preparator.prepare_data().df)
-        assert calls["kwargs"] == ({"iterations": None} if profile else {})
+        expected_kwargs: dict[str, int | None] = {"random_state": 17}
+        if profile:
+            expected_kwargs["iterations"] = None
+        assert calls["kwargs"] == expected_kwargs
         assert calls.get("profile", False) == profile
         assert calls.get("plot", False) == plot
         assert calls.get("dump") == destination
@@ -128,3 +132,26 @@ def test_main_reports_observed_size_for_all_rows(tmp_path, monkeypatch):
     )
     entrypoint.main()
     assert sizes == [2]
+
+
+@pytest.mark.parametrize("seed", [None, 0])
+def test_main_forwards_execution_seed(tmp_path, monkeypatch, seed):
+    config = load_from_conf(
+        tmp_path, base_conf(imputers="LinearImputer"), hyperparameters=""
+    )
+    config.plot_results = False
+    config.execution_random_state = seed
+    config.data_preparator = DataGenerator(
+        1, 7, NoAdditionalMissingValues(), random_state=7
+    )
+    monkeypatch.setattr(entrypoint, "conf", config)
+    calls = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    monkeypatch.setattr(entrypoint, "do_imputation", impute)
+    entrypoint.main()
+
+    assert calls["kwargs"] == {"random_state": seed}

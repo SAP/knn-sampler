@@ -248,6 +248,9 @@ class TestLoadConfigDefaults:
         assert config.profile_dump_path is None or isinstance(
             config.profile_dump_path, Path
         )
+        assert config.execution_random_state is None or isinstance(
+            config.execution_random_state, int
+        )
 
 
 class TestLoadConfigErrors:
@@ -411,6 +414,47 @@ n_neighbors = 5 : int
 """
         with pytest.warns(UserWarning, match="Bogus"):
             load_from_conf(tmp_path, base_conf(), hyperparameters)
+
+
+class TestExecutionSeed:
+    def test_execution_random_state_is_parsed(self, tmp_path):
+        conf = base_conf(extra="\n[execution]\nexecution_random_state = 123")
+        config = load_from_conf(tmp_path, conf)
+        assert config.execution_random_state == 123
+
+    @pytest.mark.parametrize(
+        "extra",
+        ["", "\n[execution]\nexecution_random_state ="],
+    )
+    def test_missing_or_blank_execution_seed_is_none(self, tmp_path, extra):
+        config = load_from_conf(tmp_path, base_conf(extra=extra))
+        assert config.execution_random_state is None
+
+    def test_seed_zero_is_valid(self, tmp_path):
+        conf = base_conf(extra="\n[execution]\nexecution_random_state = 0")
+        assert load_from_conf(tmp_path, conf).execution_random_state == 0
+
+    @pytest.mark.parametrize("raw", ["-1", "abc"])
+    def test_invalid_execution_seed_raises(self, tmp_path, raw):
+        conf = base_conf(extra=f"\n[execution]\nexecution_random_state = {raw}")
+        with pytest.raises(
+            ValueError,
+            match=rf"execution_random_state.*non-negative integer.*{re.escape(raw)}"
+            ".*execution configuration",
+        ):
+            load_from_conf(tmp_path, conf)
+
+    def test_execution_seed_does_not_change_dataset_seeds(self, tmp_path):
+        conf = base_conf(
+            extra="random_state = 7\n[execution]\nexecution_random_state = 42"
+        )
+        config = load_from_conf(tmp_path, conf)
+        preparation_seed, missingness_seed = split_random_state(7)
+
+        assert config.execution_random_state == 42
+        assert config.data_preparator.random_state == preparation_seed
+        assert isinstance(config.data_preparator.missing_generator, (Mcar, Mar))
+        assert config.data_preparator.missing_generator.random_state == missingness_seed
 
 
 class TestDatasetFields:

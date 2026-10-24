@@ -60,6 +60,16 @@ poetry run task main
 
 Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
+For end-to-end reproducible stochastic runs, set the dataset `random_state`
+in the dataset section and `execution_random_state` in the `[execution]`
+section of [`assets/config.conf`](./assets/config.conf). The dataset seed
+controls data preparation and missing-value selection; the execution seed
+controls stochastic imputation. When set, each
+`do_imputation(..., iterations=N)` iteration receives an independent derived
+seed, while `task main` performs one execution per imputer. Leave the execution
+seed blank to keep stochastic strategies unseeded. `KNNxKDEImputer` still uses
+global randomness internally and is not fully reproducible.
+
 For use from Python, load settings with `assets.config.load_config()`.
 
 ### Benchmark algorithms

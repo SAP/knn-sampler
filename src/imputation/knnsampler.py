@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from src.data_preparation.data_description import DataFrameMLData, MLSets
 from src.imputation import UncertaintyImputer
-from src.imputation.imputer import BoundsPerPercentile
+from src.imputation.imputer import BoundsPerPercentile, validate_random_state
 
 ImputationStrategy = Literal["sample", "mean", "median"]
 KNNAlgorithm = Literal["auto", "ball_tree", "kd_tree", "brute"]
@@ -29,6 +29,7 @@ KNN_WEIGHTS: tuple[KNNWeights, ...] = ("uniform", "distance")
 DEFAULT_LOWER_PERCENTILES: list[float] = [5.0]
 DEFAULT_UPPER_PERCENTILES: list[float] = [95.0]
 DEFAULT_RANDOM_STATE: int = 42
+MAX_KFOLD_RANDOM_STATE: int = 2**32 - 1
 DEFAULT_CV_FOLDS: int = 3
 
 
@@ -88,7 +89,9 @@ class KnnSampler(UncertaintyImputer):
          - 'loo_penalized': leave-one-out penalized MSE criterion.
          - 'kfold': K-fold cross-validation MSE.
     optimal_k_random_state : int | None
-        Seed for K-Fold splitting when optimal_k_method='kfold'.
+        Seed for K-Fold splitting when optimal_k_method='kfold'; defaults to 42.
+        Must be in [0, 2**32 - 1]. Set to None for nondeterministic fold
+        selection (Python API only; configuration files accept integers).
     optimal_k_cv_folds : int
         Number of CV folds (>=2) for optimal_k_method='kfold'.
     scaling_optimal_k : {'none', 'standardization', 'normalization'}
@@ -98,7 +101,10 @@ class KnnSampler(UncertaintyImputer):
 
     Notes
     -----
-    Execution randomness is controlled via execute(random_state=...).
+    Execution randomness is controlled via execute(random_state=...). When
+    executed through ``do_imputation`` with a run seed, each iteration receives
+    an independent derived seed; without a run seed, sampled executions remain
+    nondeterministic.
     Cross-validation randomness is controlled via optimal_k_random_state.
     For strategy='sample', k is automatically increased to 2 when possible.
     """
@@ -115,7 +121,7 @@ class KnnSampler(UncertaintyImputer):
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
-        optimal_k_random_state: int | None = None,
+        optimal_k_random_state: int | None = DEFAULT_RANDOM_STATE,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
@@ -133,7 +139,7 @@ class KnnSampler(UncertaintyImputer):
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
-        optimal_k_random_state: int | None = None,
+        optimal_k_random_state: int | None = DEFAULT_RANDOM_STATE,
         optimal_k_cv_folds: int = 3,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
@@ -150,7 +156,7 @@ class KnnSampler(UncertaintyImputer):
         algorithm: KNNAlgorithm = "kd_tree",
         weights: KNNWeights = "uniform",
         optimal_k_method: KOptimalMethod = "loo_penalized",
-        optimal_k_random_state: int | None = None,
+        optimal_k_random_state: int | None = DEFAULT_RANDOM_STATE,
         optimal_k_cv_folds: int = DEFAULT_CV_FOLDS,
         scaling_optimal_k: ScalingStrategy = "standardization",
         scaling_fit: ScalingStrategy = "none",
@@ -175,6 +181,17 @@ class KnnSampler(UncertaintyImputer):
             raise ValueError(
                 f"optimal_k_cv_folds must be >= 2, got {optimal_k_cv_folds}"
             )
+        optimal_k_random_state = validate_random_state(
+            optimal_k_random_state, option="optimal_k_random_state"
+        )
+        if (
+            optimal_k_random_state is not None
+            and optimal_k_random_state > MAX_KFOLD_RANDOM_STATE
+        ):
+            raise ValueError(
+                "optimal_k_random_state must be <= 2**32 - 1,"
+                f" got {optimal_k_random_state}"
+            )
 
         super().__init__(
             ml_data=ml_data,
@@ -193,22 +210,6 @@ class KnnSampler(UncertaintyImputer):
         self.optimal_k_cv_folds: int = optimal_k_cv_folds
         self.scaling_optimal_k: ScalingStrategy = scaling_optimal_k
         self.scaling_fit: ScalingStrategy = scaling_fit
-        self._rng: np.random.Generator | None = None
-
-    def _init_rng(self, random_state: int | None = None) -> None:
-        """Initialize random number generator for sampling strategy.
-
-        Parameters
-        ----------
-        random_state : int, optional
-            Seed for reproducible random number generation. Only used when
-            strategy is 'sample'.
-        """
-        if self.strategy == "sample":
-            seed = random_state if isinstance(random_state, int) else None
-            self._rng = np.random.default_rng(seed)
-        else:
-            self._rng = None
 
     def _optimal_k_scaling(self, X: pd.DataFrame) -> np.ndarray:
         """Apply scaling transformation for k selection phase.
@@ -268,6 +269,33 @@ class KnnSampler(UncertaintyImputer):
         if self.scaler is None:
             return X.to_numpy()
         return cast(np.ndarray, self.scaler.transform(X))
+
+    def _validate_columns(self, df: pd.DataFrame) -> None:
+        """Validate that the descriptor input and target columns are present.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame to validate.
+
+        Raises
+        ------
+        ValueError
+            If the input or target column is missing.
+        """
+        descriptor = self.ml_data.dataset_descriptor
+        missing = [
+            column
+            for column in (descriptor.input_column, descriptor.target_column)
+            if column not in df.columns
+        ]
+        if missing:
+            formatted = ", ".join(repr(column) for column in missing)
+            raise ValueError(
+                f"Missing required column(s): {formatted}. Expected input column"
+                f" '{descriptor.input_column}' and target column"
+                f" '{descriptor.target_column}'"
+            )
 
     def _calculate_mse(self, y_true: pd.Series, y_pred: np.ndarray) -> float:
         """Calculate mean squared error between true and predicted values.
@@ -437,6 +465,13 @@ class KnnSampler(UncertaintyImputer):
             k minimizing mean CV MSE (>=1). Falls back to penalized LOO when
             the number of complete-case training rows is smaller than the
             number of folds.
+
+        Notes
+        -----
+        Folds are materialized once and reused for every candidate k so that
+        all candidates are scored on the same split. With
+        ``optimal_k_random_state=None``, the split is therefore still
+        nondeterministic across calls but consistent within one selection.
         """
         n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
@@ -454,15 +489,16 @@ class KnnSampler(UncertaintyImputer):
         k_values = list(range(min_k, max_k + 1))
         cv_scores: list[float] = []
 
+        kfold = KFold(
+            n_splits=self.optimal_k_cv_folds,
+            shuffle=True,
+            random_state=self.optimal_k_random_state,
+        )
+        splits = list(kfold.split(x_scaled))
         for k in k_values:
             fold_scores = []
-            kfold = KFold(
-                n_splits=self.optimal_k_cv_folds,
-                shuffle=True,
-                random_state=self.optimal_k_random_state,
-            )
 
-            for train_idx, test_idx in kfold.split(x_scaled):
+            for train_idx, test_idx in splits:
                 # Skip if training fold doesn't have enough samples for k neighbors
                 if len(train_idx) < k:
                     fold_scores.append(np.inf)
@@ -497,8 +533,17 @@ class KnnSampler(UncertaintyImputer):
         Raises
         ------
         ValueError
-            If training data is empty or scaling fails.
+            If a required column is missing, training data is empty, or scaling
+            fails.
+
+        Notes
+        -----
+        Calling ``fit()`` again refits the scaler and kNN regressor on the
+        current data. A provided ``n_neighbors`` and an already selected
+        ``optimal_k`` are reused; set ``optimal_k`` to None before fitting to
+        force reselection after the data changed.
         """
+        self._validate_columns(self.ml_data.dataframe)
         nona_sets = self.ml_data.nona_sets()
         if nona_sets.x.empty:
             raise ValueError(
@@ -534,7 +579,14 @@ class KnnSampler(UncertaintyImputer):
         -------
         pd.DataFrame
             Complete dataframe with imputed target values.
+
+        Raises
+        ------
+        ValueError
+            If random_state is invalid, a required column is missing, or the
+            model is not fitted.
         """
+        self._validate_columns(self.ml_data.dataframe)
         imputed_df = self.ml_data.df
         imputed_target_values, self.bounds = self.impute_for_dataset(
             imputed_df, self.ml_data.nona_sets().y, random_state
@@ -564,9 +616,17 @@ class KnnSampler(UncertaintyImputer):
             Imputed values indexed by original dataframe row indices.
         bounds : BoundsPerPercentile
             Empirical percentile bounds from neighbor target distributions.
+
+        Raises
+        ------
+        ValueError
+            If random_state is invalid, the target column is missing, the model
+            is not fitted, or the input column is missing on a row that needs
+            target imputation.
         """
         if self.knn is None:
             raise ValueError("Model not fitted: call fit() before imputation")
+        random_state = validate_random_state(random_state)
         imputed_series = pd.Series(dtype="float64")
         bounds: BoundsPerPercentile = {
             (lp, up): ([], [])
@@ -574,11 +634,28 @@ class KnnSampler(UncertaintyImputer):
                 self.lower_percentiles, self.upper_percentiles, strict=True
             )
         }
-        missing_mask = df[self.ml_data.dataset_descriptor.target_column].isna()
+        descriptor = self.ml_data.dataset_descriptor
+        target_col = descriptor.target_column
+        input_col = descriptor.input_column
+        if target_col not in df.columns:
+            self._validate_columns(df)
+        missing_mask = df[target_col].isna()
         missing_rows = df.loc[missing_mask]
         if missing_rows.empty:
             return imputed_series, bounds
-        X_missing = missing_rows[[self.ml_data.dataset_descriptor.input_column]]
+        self._validate_columns(df)
+        missing_inputs = missing_rows[input_col].isna()
+        if missing_inputs.any():
+            indexes = missing_rows.index[missing_inputs].tolist()
+            preview = ", ".join(str(index) for index in indexes[:5])
+            if len(indexes) > 5:
+                preview += ", ..."
+            raise ValueError(
+                f"Cannot impute missing target values: input column '{input_col}'"
+                f" has missing values in {len(indexes)} row(s) that require"
+                f" imputation (indices: {preview})"
+            )
+        X_missing = missing_rows[[input_col]]
         X_missing_array = self._transform(X_missing)
         _, indexes = self.knn.kneighbors(X_missing_array)
         y_array = y_train.to_numpy()
@@ -595,11 +672,8 @@ class KnnSampler(UncertaintyImputer):
                     upper_percentiles_array.astype(float).tolist(),
                 )
         if self.strategy == "sample":
-            self._init_rng(random_state)
-            if self._rng is None:
-                # Should be unreachable given _init_rng logic for strategy="sample"
-                self._rng = np.random.default_rng(random_state)
-            random_columns = self._rng.integers(0, k, size=M)
+            rng = np.random.default_rng(random_state)
+            random_columns = rng.integers(0, k, size=M)
             imputed_values = y_neighbors[np.arange(M), random_columns]
         elif self.strategy == "mean":
             imputed_values = np.mean(y_neighbors, axis=1)

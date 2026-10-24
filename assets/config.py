@@ -74,6 +74,9 @@ class Config:
         Preparator producing the dataset to impute.
     missing_values : Rate | int
         Missing-value setting used by the preparator (rate or count).
+    execution_random_state : int | None
+        Optional run-level seed for stochastic imputations; None keeps each
+        execution nondeterministic. It does not control data preparation.
     """
 
     imputers: dict[type[Imputer], dict[str, Any]]
@@ -83,6 +86,7 @@ class Config:
     profile_dump_path: Path | None
     data_preparator: DataPreparator
     missing_values: Rate | int
+    execution_random_state: int | None = None
 
     def prepare_data_from_config(self) -> tuple[DataFrameMLData, pd.Series]:
         """Prepare the configured dataset.
@@ -199,22 +203,37 @@ def _parse_missing_values(fields: configparser.SectionProxy, name: str) -> Rate 
         ) from e
 
 
-def _parse_random_state(fields: configparser.SectionProxy, name: str) -> int | None:
-    """Parse a non-negative random_state (blank or absent means None)."""
-    raw = fields.get("random_state")
+def _parse_seed(raw: str | None, option: str, context: str) -> int | None:
+    """Parse an optional non-negative integer seed (blank or absent is None)."""
     if raw is None or raw.strip() == "":
         return None
     message = (
-        f"random_state should be a non-negative integer or left blank, got '{raw}'"
-        f" for dataset {name}"
+        f"{option} should be a non-negative integer or left blank, got '{raw}'"
+        f" for {context}"
     )
     try:
-        random_state = int(raw)
+        seed = int(raw)
     except ValueError as e:
         raise ValueError(message) from e
-    if random_state < 0:
+    if seed < 0:
         raise ValueError(message)
-    return random_state
+    return seed
+
+
+def _parse_random_state(fields: configparser.SectionProxy, name: str) -> int | None:
+    """Parse a non-negative dataset random_state (blank or absent means None)."""
+    return _parse_seed(fields.get("random_state"), "random_state", f"dataset {name}")
+
+
+def _parse_execution_random_state(
+    conf: configparser.ConfigParser,
+) -> int | None:
+    """Parse the optional execution seed (absent or blank means None)."""
+    return _parse_seed(
+        conf.get("execution", "execution_random_state", fallback=None),
+        "execution_random_state",
+        "execution configuration",
+    )
 
 
 def _extract_data_preparator(
@@ -346,6 +365,7 @@ def load_config(
         _resolve_path(raw_dump_path) if _strip_quotes(raw_dump_path).strip() else None
     )
     print_profile_stats = conf["profile"].get("print_stats") == "True"
+    execution_random_state = _parse_execution_random_state(conf)
     used_dataset_config = conf["dataset_selection"]["used_dataset"]
     try:
         dataset_fields = conf[used_dataset_config]
@@ -417,4 +437,5 @@ def load_config(
         profile_dump_path=profile_dump_path,
         data_preparator=data_preparator,
         missing_values=missing_values,
+        execution_random_state=execution_random_state,
     )
