@@ -60,27 +60,28 @@ poetry run task main
 
 Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
-For end-to-end reproducible stochastic runs, set the dataset `random_state`
-in the dataset section and `execution_random_state` in the `[execution]`
-section of [`assets/config.conf`](./assets/config.conf). The dataset seed
-controls data preparation and missing-value selection; the execution seed
-controls stochastic imputation. When set, each
-`do_imputation(..., iterations=N)` iteration receives an independent derived
-seed, while `task main` performs one execution per imputer. Leave the execution
-seed blank to keep stochastic strategies unseeded. `KNNxKDEImputer` still uses
+For reproducible seeded KnnSampler runs, set the dataset `random_state` and
+`[execution] execution_random_state` in
+[`assets/config.conf`](./assets/config.conf). The dataset seed controls data
+preparation and missing-value selection; the execution seed controls sampling
+for imputers that honor it. Each `do_imputation(..., iterations=N)` iteration
+receives an independent derived seed, while `task main` runs one execution per
+imputer. Leave the execution seed blank to run unseeded. `KNNxKDEImputer` uses
 global randomness internally and is not fully reproducible.
 
-For use from Python, load settings with `assets.config.load_config()`.
+`KnnSampler`'s K-fold selection uses `optimal_k_random_state` (default `42`,
+integer in `[0, 4294967295]`; `None` is Python-API-only) in the `[KnnSampler]`
+section of [`assets/hyperparameters.conf`](./assets/hyperparameters.conf). The
+scaler is fitted on each training fold; `loo_penalized` keeps global scaling
+on all complete-case rows. The value is validated for every method, but only
+`kfold` uses it.
 
-K-fold selection uses `optimal_k_random_state` (default `42`, `kfold` only,
-integer in `0..4294967295`; `None` is Python-API-only). Its scaler is fitted
-independently on each training fold; `loo_penalized` keeps the historical
-global scaling. The value is validated for every method, but only `kfold` uses
-it. The historical module-override path remains supported: when every required
-legacy field is set directly on `assets.config`, configuration files are not
-read and `execution_random_state` defaults to `None` unless set explicitly.
-With a partial override and no readable configuration files, optional fields
-also fall back to their defaults; required fields still raise.
+For Python use, load settings with `assets.config.load_config()`. Legacy
+module-level overrides remain supported. A complete set of required fields
+avoids configuration-file I/O; optional fields use their defaults unless set
+explicitly. When both configuration files are absent, partial overrides also
+use optional defaults; required fields still raise. A present but incomplete
+file set still reports the configuration error.
 
 ### Benchmark algorithms
 
