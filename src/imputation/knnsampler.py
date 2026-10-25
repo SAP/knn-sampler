@@ -104,7 +104,9 @@ class KnnSampler(UncertaintyImputer):
     optimal_k_cv_folds : int
         Number of CV folds (>=2) for optimal_k_method='kfold'.
     scaling_optimal_k : {'none', 'standardization', 'normalization'}
-        Scaling applied during k selection phase.
+        Scaling applied during k selection phase. For kfold, the scaler is
+        fitted independently on each training fold; loo_penalized keeps the
+        historical global fit.
     scaling_fit : {'none', 'standardization', 'normalization'}
         Scaling applied for final fitting and imputation.
 
@@ -214,8 +216,21 @@ class KnnSampler(UncertaintyImputer):
         self.scaling_optimal_k: ScalingStrategy = scaling_optimal_k
         self.scaling_fit: ScalingStrategy = scaling_fit
 
+    def _build_scaler(
+        self, strategy: ScalingStrategy
+    ) -> StandardScaler | MinMaxScaler | None:
+        """Build an unfitted scaler for a scaling strategy."""
+        if strategy == "standardization":
+            return StandardScaler()
+        if strategy == "normalization":
+            return MinMaxScaler()
+        return None
+
     def _optimal_k_scaling(self, X: pd.DataFrame) -> np.ndarray:
         """Apply scaling transformation for k selection phase.
+
+        The scaler is fitted on all rows in ``X``. This is the historical
+        leave-one-out path; the K-fold path fits one scaler per training fold.
 
         Parameters
         ----------
@@ -227,11 +242,22 @@ class KnnSampler(UncertaintyImputer):
         np.ndarray
             Scaled feature matrix according to scaling_optimal_k strategy.
         """
-        if self.scaling_optimal_k == "standardization":
-            return cast(np.ndarray, StandardScaler().fit_transform(X))
-        if self.scaling_optimal_k == "normalization":
-            return cast(np.ndarray, MinMaxScaler().fit_transform(X))
-        return X.to_numpy()
+        scaler = self._build_scaler(self.scaling_optimal_k)
+        if scaler is None:
+            return X.to_numpy()
+        return cast(np.ndarray, scaler.fit_transform(X))
+
+    def _scale_optimal_k_fold(
+        self, x_train: pd.DataFrame, x_test: pd.DataFrame
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Fit k-selection scaling on one training fold and transform both folds."""
+        scaler = self._build_scaler(self.scaling_optimal_k)
+        if scaler is None:
+            return x_train.to_numpy(), x_test.to_numpy()
+        return (
+            cast(np.ndarray, scaler.fit_transform(x_train)),
+            cast(np.ndarray, scaler.transform(x_test)),
+        )
 
     def _fit_scaler(self, X: pd.DataFrame) -> None:
         """Fit scaling transformation for final imputation phase.
@@ -249,12 +275,8 @@ class KnnSampler(UncertaintyImputer):
         if X.empty:
             raise ValueError("Cannot fit scaler on empty DataFrame")
 
-        if self.scaling_fit == "standardization":
-            self.scaler = StandardScaler().fit(X)
-        elif self.scaling_fit == "normalization":
-            self.scaler = MinMaxScaler().fit(X)
-        else:
-            self.scaler = None
+        scaler = self._build_scaler(self.scaling_fit)
+        self.scaler = None if scaler is None else scaler.fit(X)
 
     def _transform(self, X: pd.DataFrame) -> np.ndarray:
         """Transform features using fitted scaler.
@@ -371,6 +393,12 @@ class KnnSampler(UncertaintyImputer):
         -------
         int
             Optimal number of neighbors (>=1).
+
+        Notes
+        -----
+        The k-selection scaler is fitted on all complete-case rows, including
+        the row being left out. This path is retained for publication
+        compatibility; use optimal_k_method='kfold' for fold-local scaling.
         """
         n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
@@ -477,14 +505,15 @@ class KnnSampler(UncertaintyImputer):
         Notes
         -----
         Folds are materialized once and reused for every candidate k so that
-        all candidates are scored on the same split. With
+        all candidates are scored on the same split. The k-selection scaler is
+        fitted independently on each training fold and applied to its
+        validation fold, so validation rows do not influence scaling. With
         ``optimal_k_random_state=None``, the split is therefore still
         nondeterministic across calls but consistent within one selection.
         """
         _validate_kfold_random_state(self.optimal_k_random_state)
         n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
-        x_scaled = self._optimal_k_scaling(x_train)
 
         min_k, max_k = self._get_k_bounds(n_samples)
         if max_k <= min_k:
@@ -503,22 +532,35 @@ class KnnSampler(UncertaintyImputer):
             shuffle=True,
             random_state=self.optimal_k_random_state,
         )
-        splits = list(kfold.split(x_scaled))
+        folds: list[tuple[np.ndarray, np.ndarray, pd.Series, pd.Series]] = []
+        for train_idx, test_idx in kfold.split(x_train):
+            x_fold_train, x_fold_test = self._scale_optimal_k_fold(
+                x_train.iloc[train_idx], x_train.iloc[test_idx]
+            )
+            folds.append(
+                (
+                    x_fold_train,
+                    x_fold_test,
+                    y_train.iloc[train_idx],
+                    y_train.iloc[test_idx],
+                )
+            )
+
         for k in k_values:
             fold_scores = []
 
-            for train_idx, test_idx in splits:
+            for x_fold_train, x_fold_test, y_fold_train, y_fold_test in folds:
                 # Skip if training fold doesn't have enough samples for k neighbors
-                if len(train_idx) < k:
+                if len(x_fold_train) < k:
                     fold_scores.append(np.inf)
                     continue
 
                 knn = KNeighborsRegressor(
                     n_neighbors=k, algorithm=self.algorithm, weights=self.weights
                 )
-                knn.fit(x_scaled[train_idx], y_train.iloc[train_idx])
-                y_pred = knn.predict(x_scaled[test_idx])
-                mse = self._calculate_mse(y_train.iloc[test_idx], y_pred)
+                knn.fit(x_fold_train, y_fold_train)
+                y_pred = knn.predict(x_fold_test)
+                mse = self._calculate_mse(y_fold_test, y_pred)
                 fold_scores.append(mse)
 
             # Calculate mean CV score, handling infinite values
