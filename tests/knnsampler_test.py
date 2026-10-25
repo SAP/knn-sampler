@@ -426,6 +426,19 @@ class TestKfoldSelection(unittest.TestCase):
 
         self.assertEqual(sampler.optimal_k_random_state, seed)
 
+    def test_kfold_seed_bound_is_rechecked_at_fit(self):
+        sampler = KnnSampler(
+            make_kfold_ml_data(),
+            compute_bounds=False,
+            strategy="mean",
+            optimal_k_method="loo_penalized",
+            optimal_k_random_state=MAX_KFOLD_RANDOM_STATE + 1,
+        )
+        sampler.optimal_k_method = "kfold"
+
+        with self.assertRaisesRegex(ValueError, r"<= 2\*\*32 - 1"):
+            sampler.fit()
+
 
 if __name__ == "__main__":
     unittest.main()

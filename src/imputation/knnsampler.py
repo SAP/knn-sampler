@@ -33,6 +33,14 @@ MAX_KFOLD_RANDOM_STATE: int = 2**32 - 1
 DEFAULT_CV_FOLDS: int = 3
 
 
+def _validate_kfold_random_state(random_state: int | None) -> None:
+    """Validate that a K-fold seed fits scikit-learn's RandomState range."""
+    if random_state is not None and random_state > MAX_KFOLD_RANDOM_STATE:
+        raise ValueError(
+            f"optimal_k_random_state must be <= 2**32 - 1, got {random_state}"
+        )
+
+
 def validate_option(name: str, value: str, allowed: tuple[str, ...]) -> None:
     """Validate that `value` is one of `allowed` and raise ValueError with
     a consistent message if not.
@@ -185,15 +193,8 @@ class KnnSampler(UncertaintyImputer):
         optimal_k_random_state = validate_random_state(
             optimal_k_random_state, option="optimal_k_random_state"
         )
-        if (
-            optimal_k_method == "kfold"
-            and optimal_k_random_state is not None
-            and optimal_k_random_state > MAX_KFOLD_RANDOM_STATE
-        ):
-            raise ValueError(
-                "optimal_k_random_state must be <= 2**32 - 1,"
-                f" got {optimal_k_random_state}"
-            )
+        if optimal_k_method == "kfold":
+            _validate_kfold_random_state(optimal_k_random_state)
 
         super().__init__(
             ml_data=ml_data,
@@ -468,6 +469,11 @@ class KnnSampler(UncertaintyImputer):
             the number of complete-case training rows is smaller than the
             number of folds.
 
+        Raises
+        ------
+        ValueError
+            If optimal_k_random_state is outside scikit-learn's accepted range.
+
         Notes
         -----
         Folds are materialized once and reused for every candidate k so that
@@ -475,6 +481,7 @@ class KnnSampler(UncertaintyImputer):
         ``optimal_k_random_state=None``, the split is therefore still
         nondeterministic across calls but consistent within one selection.
         """
+        _validate_kfold_random_state(self.optimal_k_random_state)
         n_samples = len(train_sets.x)
         x_train, y_train = train_sets.x, train_sets.y
         x_scaled = self._optimal_k_scaling(x_train)

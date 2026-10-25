@@ -144,12 +144,11 @@ class TestExecutionSeeds:
         ("execution_seed", "dataset_seed"),
         [
             (42, 42),
-            # [seed, tag] entropy aliases seed + 2**32.
+            # Large execution and dataset seeds exercise multi-word entropy
+            # and 32-bit truncation; derived seeds must remain disjoint.
             (42, 2**32 + 42),
             (0, 2**32),
-            # A tag placed before the iteration index aliases seed + (2 << 128).
             (42, 42 + (2 << 128)),
-            # Large execution seeds alias the same families one word higher.
             (42 + (2 << 128), 42 + (2 << 128) + 2**160),
             (2**32 + 42, 2**64 + 2**32 + 42),
         ],
