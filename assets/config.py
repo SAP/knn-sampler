@@ -1,7 +1,7 @@
 import configparser
 import warnings
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -99,7 +99,19 @@ class Config:
         return _prepare_data(self.data_preparator)
 
 
-_LEGACY_CONFIG_NAMES = tuple(field.name for field in fields(Config))
+_CONFIG_FIELDS = fields(Config)
+_LEGACY_CONFIG_NAMES = tuple(field.name for field in _CONFIG_FIELDS)
+# Fields without a default form the complete historical namespace. Once every
+# one of them is overridden, optional fields resolve to their dataclass default
+# without touching configuration files: the caller fully describes the run.
+_REQUIRED_CONFIG_NAMES = tuple(
+    field.name for field in _CONFIG_FIELDS if field.default is MISSING
+)
+_CONFIG_DEFAULTS = {
+    field.name: field.default
+    for field in _CONFIG_FIELDS
+    if field.default is not MISSING
+}
 
 # reload() retains the module namespace; discard previously cached settings.
 for _legacy_name in _LEGACY_CONFIG_NAMES:
@@ -131,8 +143,13 @@ def __getattr__(name: str) -> Any:
     if name not in _LEGACY_CONFIG_NAMES:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     if name not in globals():
-        for field_name, value in vars(load_config()).items():
-            globals().setdefault(field_name, value)
+        if name in _CONFIG_DEFAULTS and all(
+            required in globals() for required in _REQUIRED_CONFIG_NAMES
+        ):
+            globals()[name] = _CONFIG_DEFAULTS[name]
+        else:
+            for field_name, value in vars(load_config()).items():
+                globals().setdefault(field_name, value)
     return globals()[name]
 
 

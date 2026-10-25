@@ -145,6 +145,34 @@ def test_legacy_lazy_load_preserves_early_overrides(monkeypatch):
     assert len(prepared.df) == 10
 
 
+@pytest.mark.parametrize("complete", [False, True])
+def test_optional_legacy_field_skips_load_for_complete_overrides(monkeypatch, complete):
+    name = "assets._optional_legacy_config_test"
+    spec = importlib.util.spec_from_file_location(name, configuration.__file__)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    spec.loader.exec_module(module)
+    for field in fields(module.Config):
+        if field.name == "execution_random_state":
+            continue
+        if not complete and field.name == "missing_values":
+            continue
+        module.__dict__[field.name] = object()
+
+    def load_config():
+        raise AssertionError("optional field read configuration")
+
+    monkeypatch.setattr(module, "load_config", load_config)
+    if complete:
+        assert module.execution_random_state is None
+        assert module.__dict__["execution_random_state"] is None
+        assert module.execution_random_state is None
+    else:
+        with pytest.raises(AssertionError, match="read configuration"):
+            _ = module.execution_random_state
+
+
 BASE_CONF_TEMPLATE = """
 [imputation_algorithms]
 imputation_algorithms = {imputers}

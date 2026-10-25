@@ -15,10 +15,11 @@ from src.imputation.imputer import UncertaintyImputer, validate_random_state
 from src.imputation_context import ImputationContext
 from src.imputation_plot import ImputationPlot
 
-# Execution seeds use a distinct SeedSequence entropy domain, [seed, tag],
-# rather than a child of SeedSequence(seed). split_random_state() reserves the
-# child streams of SeedSequence(seed) for preparation and missingness.
-_EXECUTION_SEED_TAG: int = 1
+# split_random_state() reserves the first two children of SeedSequence(seed)
+# for preparation and missingness. Execution seeds use the following children:
+# their assembled entropy ends with an index >= 2, so it cannot coincide with
+# those streams for any seed magnitude.
+_EXECUTION_SEED_OFFSET: int = 2
 
 
 def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | None]:
@@ -44,8 +45,11 @@ def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | 
     random_state = validate_random_state(random_state)
     if random_state is None:
         return [None] * count
-    root = np.random.SeedSequence([random_state, _EXECUTION_SEED_TAG])
-    return [int(child.generate_state(1)[0]) for child in root.spawn(count)]
+    root = np.random.SeedSequence(random_state)
+    children = root.spawn(_EXECUTION_SEED_OFFSET + count)
+    return [
+        int(child.generate_state(1)[0]) for child in children[_EXECUTION_SEED_OFFSET:]
+    ]
 
 
 @overload

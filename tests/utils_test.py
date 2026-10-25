@@ -137,14 +137,32 @@ class TestExecutionSeeds:
 
         assert numpy_seeded.seeds == python_seeded.seeds
 
+    @pytest.mark.parametrize(
+        ("execution_seed", "dataset_seed"),
+        [
+            (42, 42),
+            # [seed, tag] entropy aliases seed + 2**32.
+            (42, 2**32 + 42),
+            (0, 2**32),
+            # A tag placed before the iteration index aliases seed + (2 << 128).
+            (42, 42 + (2 << 128)),
+            # Large execution seeds alias the same families one word higher.
+            (42 + (2 << 128), 42 + (2 << 128) + 2**160),
+            (2**32 + 42, 2**64 + 2**32 + 42),
+        ],
+    )
     def test_execution_seeds_are_disjoint_from_preparation_seeds(
-        self, complete_data: DataFrameMLData
+        self,
+        complete_data: DataFrameMLData,
+        execution_seed: int,
+        dataset_seed: int,
     ):
-        preparation_seed, missingness_seed = split_random_state(42)
+        preparation_seed, missingness_seed = split_random_state(dataset_seed)
         imputer = RecordingImputer(complete_data)
 
-        do_imputation(imputer, iterations=2, random_state=42)
+        do_imputation(imputer, iterations=5, random_state=execution_seed)
 
+        assert len(set(imputer.seeds)) == 5
         assert set(imputer.seeds).isdisjoint({preparation_seed, missingness_seed})
 
 
