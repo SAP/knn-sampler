@@ -175,6 +175,94 @@ def test_main_reads_file_seed_for_partial_overrides(monkeypatch, tmp_path, profi
     assert calls["kwargs"] == expected_kwargs
 
 
+def test_main_full_legacy_overrides_ignore_file_execution_seed(monkeypatch, tmp_path):
+    """A complete legacy override set documents that files are not read."""
+    config_path = tmp_path / "config.conf"
+    config_path.write_text(
+        base_conf(
+            imputers="LinearImputer",
+            extra="\n[execution]\nexecution_random_state = 23",
+        ),
+        encoding="utf-8",
+    )
+    hyperparameters_path = tmp_path / "hyperparameters.conf"
+    hyperparameters_path.write_text("", encoding="utf-8")
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+    calls: dict[str, Any] = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            missing_values=0,
+            profile=False,
+            plot_results=False,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(entrypoint, "do_imputation", impute)
+        monkeypatch.setattr(configuration, "DEFAULT_CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            configuration,
+            "DEFAULT_HYPERPARAMETERS_PATH",
+            hyperparameters_path,
+        )
+        monkeypatch.setattr(
+            configuration.configparser.ConfigParser,
+            "read",
+            lambda *args, **kwargs: pytest.fail(
+                "complete legacy overrides must not read configuration files"
+            ),
+        )
+        entrypoint.main()
+
+    assert calls["kwargs"] == {"random_state": None}
+
+
+def test_main_seeded_knnsampler_is_reproducible(tmp_path, monkeypatch):
+    """Configuration, main, and the real KnnSampler reproduce seeded output."""
+    config_text = (
+        base_conf(imputers="KnnSampler") + "\nrandom_state = 11\n\n[execution]\n"
+    )
+    hyperparameters = """
+[KnnSampler]
+n_neighbors = 3 : int
+compute_bounds = False : bool
+"""
+    captured: list[dict[Any, pd.DataFrame]] = []
+
+    def capture(results, *args, **kwargs):
+        captured.append(
+            {imputer: frame.copy() for imputer, (frame, _elapsed) in results.items()}
+        )
+
+    monkeypatch.setattr(entrypoint, "do_plot_results", capture)
+
+    def run(execution_seed: int) -> pd.DataFrame:
+        config = load_from_conf(
+            tmp_path,
+            f"{config_text}execution_random_state = {execution_seed}\n",
+            hyperparameters=hyperparameters,
+        )
+        config.plot_results = True
+        monkeypatch.setattr(entrypoint, "conf", config)
+        entrypoint.main()
+        return next(iter(captured[-1].values()))
+
+    first = run(17)
+    second = run(17)
+    other = run(18)
+
+    pd.testing.assert_frame_equal(first, second)
+    assert not first.equals(other)
+
+
 def test_main_reports_observed_size_for_all_rows(tmp_path, monkeypatch):
     import main as entrypoint
 

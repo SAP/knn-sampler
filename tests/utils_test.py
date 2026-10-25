@@ -5,7 +5,10 @@ import pandas as pd
 import pytest
 
 from src.data_preparation.data_description import DataFrameMLData
-from src.data_preparation.data_preparation import split_random_state
+from src.data_preparation.data_preparation import (
+    SPLIT_RANDOM_STATE_CHILD_COUNT,
+    split_random_state,
+)
 from src.data_preparation.dataset_description import DatasetDescriptor
 from src.imputation import Imputer, KnnImputer, KnnSampler, LinearImputer
 from src.utils import do_imputation, instantiate_imputers
@@ -158,12 +161,19 @@ class TestExecutionSeeds:
         dataset_seed: int,
     ):
         preparation_seed, missingness_seed = split_random_state(dataset_seed)
+        reserved_seeds = {
+            int(child.generate_state(1)[0])
+            for child in np.random.SeedSequence(dataset_seed).spawn(
+                SPLIT_RANDOM_STATE_CHILD_COUNT
+            )
+        }
         imputer = RecordingImputer(complete_data)
 
         do_imputation(imputer, iterations=5, random_state=execution_seed)
 
         assert len(set(imputer.seeds)) == 5
-        assert set(imputer.seeds).isdisjoint({preparation_seed, missingness_seed})
+        assert {preparation_seed, missingness_seed} <= reserved_seeds
+        assert set(imputer.seeds).isdisjoint(reserved_seeds)
 
 
 class TestSeededKnnSampler:

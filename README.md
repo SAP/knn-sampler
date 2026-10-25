@@ -72,6 +72,12 @@ global randomness internally and is not fully reproducible.
 
 For use from Python, load settings with `assets.config.load_config()`.
 
+K-fold selection uses `optimal_k_random_state` (default `42`, `kfold` only,
+integer in `0..4294967295`; `None` is Python-API-only). The historical
+module-override path remains supported: when every required legacy field is set
+directly on `assets.config`, configuration files are not read and
+`execution_random_state` defaults to `None` unless set explicitly.
+
 ### Benchmark algorithms
 
 Note: the benchmarking scripts do not have dedicated configuration files. To change benchmark settings, edit the top of [benchmark_all.py](./benchmark_all.py) and [benchmark_knnsampler.py](./benchmark_knnsampler.py).

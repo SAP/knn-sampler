@@ -9,17 +9,20 @@ import pandas as pd
 from tqdm import tqdm, trange
 
 from src.data_preparation.data_description import DataFrameMLData
-from src.data_preparation.data_preparation import Rate
+from src.data_preparation.data_preparation import (
+    SPLIT_RANDOM_STATE_CHILD_COUNT,
+    Rate,
+)
 from src.imputation import Imputer
 from src.imputation.imputer import UncertaintyImputer, validate_random_state
 from src.imputation_context import ImputationContext
 from src.imputation_plot import ImputationPlot
 
-# split_random_state() reserves the first two children of SeedSequence(seed)
+# split_random_state() reserves SPLIT_RANDOM_STATE_CHILD_COUNT child streams
 # for preparation and missingness. Execution seeds use the following children:
-# their assembled entropy ends with an index >= 2, so it cannot coincide with
-# those streams for any seed magnitude.
-_EXECUTION_SEED_OFFSET: int = 2
+# their spawn keys are disjoint by construction, so execution cannot reuse a
+# reserved stream. Truncation to 32-bit values makes a value collision
+# negligible, though not mathematically impossible.
 
 
 def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | None]:
@@ -46,9 +49,10 @@ def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | 
     if random_state is None:
         return [None] * count
     root = np.random.SeedSequence(random_state)
-    children = root.spawn(_EXECUTION_SEED_OFFSET + count)
+    children = root.spawn(SPLIT_RANDOM_STATE_CHILD_COUNT + count)
     return [
-        int(child.generate_state(1)[0]) for child in children[_EXECUTION_SEED_OFFSET:]
+        int(child.generate_state(1)[0])
+        for child in children[SPLIT_RANDOM_STATE_CHILD_COUNT:]
     ]
 
 
@@ -98,6 +102,11 @@ def do_imputation(
         If iterations is None, one timed result per imputer.
     dict[Imputer, list[tuple[pd.DataFrame, float]]]
         Otherwise, one timed result per imputer and iteration.
+
+    Raises
+    ------
+    ValueError
+        If random_state is not a non-negative integer or None.
     """
     seed_count = 1 if iterations is None else max(iterations, 0)
     execution_seeds = _derive_execution_seeds(random_state, seed_count)

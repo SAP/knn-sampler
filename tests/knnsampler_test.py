@@ -242,6 +242,32 @@ class TestInputValidation(unittest.TestCase):
                 sampler.ml_data.nona_sets().y,
             )
 
+    def test_missing_target_column_raises_on_impute_for_dataset(self):
+        sampler = KnnSampler(
+            make_ml_data(total_size=20, complete_size=10),
+            compute_bounds=False,
+            n_neighbors=3,
+        )
+        sampler.fit()
+
+        with self.assertRaisesRegex(ValueError, r"Missing required column\(s\): 'Y'"):
+            sampler.impute_for_dataset(
+                pd.DataFrame({"X": [1.0]}),
+                sampler.ml_data.nona_sets().y,
+            )
+
+    def test_missing_column_raises_on_execute_after_fit(self):
+        sampler = KnnSampler(
+            make_ml_data(total_size=20, complete_size=10),
+            compute_bounds=False,
+            n_neighbors=3,
+        )
+        sampler.fit()
+        del sampler.ml_data.dataframe["X"]
+
+        with self.assertRaisesRegex(ValueError, r"Missing required column\(s\): 'X'"):
+            sampler.execute()
+
     def test_no_missing_targets_does_not_require_input_column(self):
         sampler = KnnSampler(
             make_ml_data(total_size=20, complete_size=10),
@@ -295,6 +321,21 @@ class TestKfoldSelection(unittest.TestCase):
                 optimal_k_method="kfold",
             )
             self.assertEqual(sampler.optimal_k_random_state, DEFAULT_RANDOM_STATE)
+            sampler.fit()
+            selected.append(sampler.optimal_k)
+
+        self.assertEqual(len(set(selected)), 1)
+
+    def test_loo_penalized_ignores_optimal_k_random_state(self):
+        selected = []
+        for seed in (None, 0, 7, MAX_KFOLD_RANDOM_STATE):
+            sampler = KnnSampler(
+                make_kfold_ml_data(),
+                compute_bounds=False,
+                strategy="mean",
+                optimal_k_method="loo_penalized",
+                optimal_k_random_state=seed,
+            )
             sampler.fit()
             selected.append(sampler.optimal_k)
 
@@ -373,6 +414,17 @@ class TestKfoldSelection(unittest.TestCase):
                 optimal_k_method="kfold",
                 optimal_k_random_state=MAX_KFOLD_RANDOM_STATE + 1,
             )
+
+    def test_random_state_upper_bound_is_kfold_only(self):
+        seed = MAX_KFOLD_RANDOM_STATE + 1
+        sampler = KnnSampler(
+            make_kfold_ml_data(),
+            compute_bounds=False,
+            optimal_k_method="loo_penalized",
+            optimal_k_random_state=seed,
+        )
+
+        self.assertEqual(sampler.optimal_k_random_state, seed)
 
 
 if __name__ == "__main__":

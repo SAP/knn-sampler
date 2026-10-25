@@ -77,6 +77,9 @@ class Config:
     execution_random_state : int | None
         Optional run-level seed for stochastic imputations; None keeps each
         execution nondeterministic. It does not control data preparation.
+        When every historical module field is overridden directly, this
+        defaults to None without reading configuration files unless set
+        explicitly.
     """
 
     imputers: dict[type[Imputer], dict[str, Any]]

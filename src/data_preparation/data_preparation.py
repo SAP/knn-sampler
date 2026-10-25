@@ -16,6 +16,11 @@ from src.data_preparation.dataset_description import (
 GeometryType = Literal["linear", "ring"]
 GEOMETRY_TYPES: tuple[GeometryType, ...] = ("linear", "ring")
 
+# SeedSequence children reserved by split_random_state() for data preparation
+# and missingness. Execution seed derivation uses the same count so the
+# reserved streams have a single source of truth.
+SPLIT_RANDOM_STATE_CHILD_COUNT: int = 2
+
 
 def split_random_state(random_state: int | None) -> tuple[int | None, int | None]:
     """Derive replayable preparation/missingness seeds from separate child streams.
@@ -26,7 +31,9 @@ def split_random_state(random_state: int | None) -> tuple[int | None, int | None
     """
     if random_state is None:
         return None, None
-    preparation, missingness = np.random.SeedSequence(random_state).spawn(2)
+    preparation, missingness = np.random.SeedSequence(random_state).spawn(
+        SPLIT_RANDOM_STATE_CHILD_COUNT
+    )
     return int(preparation.generate_state(1)[0]), int(missingness.generate_state(1)[0])
 
 

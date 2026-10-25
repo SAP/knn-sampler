@@ -90,8 +90,9 @@ class KnnSampler(UncertaintyImputer):
          - 'kfold': K-fold cross-validation MSE.
     optimal_k_random_state : int | None
         Seed for K-Fold splitting when optimal_k_method='kfold'; defaults to 42.
-        Must be in [0, 2**32 - 1]. Set to None for nondeterministic fold
-        selection (Python API only; configuration files accept integers).
+        With kfold, it must be in [0, 2**32 - 1]. Set to None for
+        nondeterministic fold selection (Python API only; configuration files
+        accept integers). Ignored by loo_penalized.
     optimal_k_cv_folds : int
         Number of CV folds (>=2) for optimal_k_method='kfold'.
     scaling_optimal_k : {'none', 'standardization', 'normalization'}
@@ -185,7 +186,8 @@ class KnnSampler(UncertaintyImputer):
             optimal_k_random_state, option="optimal_k_random_state"
         )
         if (
-            optimal_k_random_state is not None
+            optimal_k_method == "kfold"
+            and optimal_k_random_state is not None
             and optimal_k_random_state > MAX_KFOLD_RANDOM_STATE
         ):
             raise ValueError(
@@ -572,8 +574,9 @@ class KnnSampler(UncertaintyImputer):
 
         Parameters
         ----------
-        random_state : int, optional
-            Seed for reproducible sampling when strategy='sample'.
+        random_state : int | None
+            Seed for reproducible sampling when strategy='sample'. It is
+            validated for every strategy.
 
         Returns
         -------
@@ -638,11 +641,15 @@ class KnnSampler(UncertaintyImputer):
         target_col = descriptor.target_column
         input_col = descriptor.input_column
         if target_col not in df.columns:
+            # Validate before indexing so a missing target gets an actionable
+            # message instead of a raw KeyError.
             self._validate_columns(df)
         missing_mask = df[target_col].isna()
         missing_rows = df.loc[missing_mask]
         if missing_rows.empty:
             return imputed_series, bounds
+        # Validate the input column only when target values need imputation;
+        # callers may inspect fully observed targets without providing inputs.
         self._validate_columns(df)
         missing_inputs = missing_rows[input_col].isna()
         if missing_inputs.any():

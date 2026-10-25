@@ -10,7 +10,7 @@ from src.data_preparation.data_description import DataFrameMLData
 def validate_random_state(
     random_state: int | None, *, option: str = "random_state"
 ) -> int | None:
-    """Validate and normalize an optional non-negative execution seed.
+    """Validate and normalize an optional non-negative random seed.
 
     Parameters
     ----------
