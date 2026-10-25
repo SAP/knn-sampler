@@ -34,7 +34,8 @@ DEFAULT_CV_FOLDS: int = 3
 
 
 def _validate_kfold_random_state(random_state: int | None) -> None:
-    """Validate that a K-fold seed fits scikit-learn's RandomState range."""
+    """Validate and normalize a K-fold seed and check its range."""
+    random_state = validate_random_state(random_state, option="optimal_k_random_state")
     if random_state is not None and random_state > MAX_KFOLD_RANDOM_STATE:
         raise ValueError(
             f"optimal_k_random_state must be <= 2**32 - 1, got {random_state}"
@@ -100,7 +101,8 @@ class KnnSampler(UncertaintyImputer):
         Seed for K-Fold splitting when optimal_k_method='kfold'; defaults to 42.
         With kfold, it must be in [0, 2**32 - 1]. Set to None for
         nondeterministic fold selection (Python API only; configuration files
-        accept integers). Ignored by loo_penalized.
+        accept integers). Validated for every method, but unused by
+        loo_penalized.
     optimal_k_cv_folds : int
         Number of CV folds (>=2) for optimal_k_method='kfold'.
     scaling_optimal_k : {'none', 'standardization', 'normalization'}

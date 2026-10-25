@@ -72,24 +72,39 @@ class CountingKFold(SklearnKFold):
 
 
 class RecordingScaler:
-    """Scaler double recording the values passed to fit."""
+    """Scaler double recording fit and transform inputs per instance."""
 
-    fit_values: ClassVar[list[set[Any]]] = []
+    instances: ClassVar[list["RecordingScaler"]] = []
+    kind: ClassVar[str] = "base"
+
+    def __init__(self) -> None:
+        self.fit_values: set[Any] | None = None
+        self.transform_values: list[set[Any]] = []
+        type(self).instances.append(self)
 
     @classmethod
     def reset(cls) -> None:
-        cls.fit_values = []
+        cls.instances = []
 
     def fit(self, X: Any, y: Any = None, **kwargs: Any) -> "RecordingScaler":
-        type(self).fit_values.append(set(np.asarray(X).ravel()))
+        self.fit_values = set(np.asarray(X).ravel())
         return self
 
     def transform(self, X: Any) -> np.ndarray:
+        self.transform_values.append(set(np.asarray(X).ravel()))
         return np.asarray(X)
 
     def fit_transform(self, X: Any, y: Any = None, **kwargs: Any) -> np.ndarray:
         self.fit(X, y, **kwargs)
         return self.transform(X)
+
+
+class RecordingStandardScaler(RecordingScaler):
+    kind = "standardization"
+
+
+class RecordingMinMaxScaler(RecordingScaler):
+    kind = "normalization"
 
 
 class TestOptimalKSelection(unittest.TestCase):
@@ -335,16 +350,35 @@ class TestKfoldScaling(unittest.TestCase):
     def test_scaler_is_fitted_on_each_training_fold(self):
         data = make_kfold_ml_data()
         train_sets = data.nona_sets()
+        splits = list(
+            SklearnKFold(n_splits=3, shuffle=True, random_state=7).split(train_sets.x)
+        )
         expected_fit_values = [
             set(np.asarray(train_sets.x.iloc[train_idx]).ravel())
-            for train_idx, _test_idx in SklearnKFold(
-                n_splits=3, shuffle=True, random_state=7
-            ).split(train_sets.x)
+            for train_idx, _test_idx in splits
+        ]
+        expected_transform_values = [
+            set(np.asarray(train_sets.x.iloc[test_idx]).ravel())
+            for _train_idx, test_idx in splits
         ]
 
-        for scaling in ("standardization", "normalization"):
+        for scaling, expected_kind, expected_type, other_type in (
+            (
+                "standardization",
+                "standardization",
+                RecordingStandardScaler,
+                RecordingMinMaxScaler,
+            ),
+            (
+                "normalization",
+                "normalization",
+                RecordingMinMaxScaler,
+                RecordingStandardScaler,
+            ),
+        ):
             with self.subTest(scaling=scaling):
-                RecordingScaler.reset()
+                RecordingStandardScaler.reset()
+                RecordingMinMaxScaler.reset()
                 sampler = KnnSampler(
                     data,
                     compute_bounds=False,
@@ -358,16 +392,29 @@ class TestKfoldScaling(unittest.TestCase):
                 with (
                     patch(
                         "src.imputation.knnsampler.StandardScaler",
-                        RecordingScaler,
+                        RecordingStandardScaler,
                     ),
                     patch(
                         "src.imputation.knnsampler.MinMaxScaler",
-                        RecordingScaler,
+                        RecordingMinMaxScaler,
                     ),
                 ):
                     sampler.find_optimal_k_kfold(train_sets)
 
-                self.assertCountEqual(RecordingScaler.fit_values, expected_fit_values)
+                self.assertEqual(other_type.instances, [])
+                self.assertEqual(len(expected_type.instances), len(splits))
+                for scaler, fit_values, transform_values in zip(
+                    expected_type.instances,
+                    expected_fit_values,
+                    expected_transform_values,
+                    strict=True,
+                ):
+                    self.assertEqual(scaler.kind, expected_kind)
+                    self.assertEqual(scaler.fit_values, fit_values)
+                    self.assertEqual(
+                        scaler.transform_values,
+                        [fit_values, transform_values],
+                    )
 
     def test_none_scaling_does_not_instantiate_scaler(self):
         data = make_kfold_ml_data()
@@ -525,6 +572,22 @@ class TestKfoldSelection(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, r"<= 2\*\*32 - 1"):
             sampler.fit()
+
+    def test_kfold_seed_type_is_rechecked_at_fit(self):
+        for invalid in (-5, 1.5, "42", True, np.bool_(True)):
+            with self.subTest(random_state=invalid):
+                sampler = KnnSampler(
+                    make_kfold_ml_data(),
+                    compute_bounds=False,
+                    strategy="mean",
+                    optimal_k_method="loo_penalized",
+                    optimal_k_random_state=7,
+                )
+                sampler.optimal_k_random_state = cast(Any, invalid)
+                sampler.optimal_k_method = "kfold"
+
+                with self.assertRaisesRegex(ValueError, "optimal_k_random_state"):
+                    sampler.fit()
 
 
 if __name__ == "__main__":

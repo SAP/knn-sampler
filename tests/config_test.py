@@ -167,7 +167,6 @@ def test_optional_legacy_field_skips_load_for_complete_overrides(monkeypatch, co
     if complete:
         assert module.execution_random_state is None
         assert module.__dict__["execution_random_state"] is None
-        assert module.execution_random_state is None
     else:
         with pytest.raises(AssertionError, match="read configuration"):
             _ = module.execution_random_state

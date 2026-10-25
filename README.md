@@ -75,10 +75,12 @@ For use from Python, load settings with `assets.config.load_config()`.
 K-fold selection uses `optimal_k_random_state` (default `42`, `kfold` only,
 integer in `0..4294967295`; `None` is Python-API-only). Its scaler is fitted
 independently on each training fold; `loo_penalized` keeps the historical
-global scaling. The historical module-override path remains supported: when
-every required legacy field is set directly on `assets.config`, configuration
-files are not read and `execution_random_state` defaults to `None` unless set
-explicitly.
+global scaling. The value is validated for every method, but only `kfold` uses
+it. The historical module-override path remains supported: when every required
+legacy field is set directly on `assets.config`, configuration files are not
+read and `execution_random_state` defaults to `None` unless set explicitly.
+With a partial override and no readable configuration files, optional fields
+also fall back to their defaults; required fields still raise.
 
 ### Benchmark algorithms
 

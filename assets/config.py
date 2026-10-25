@@ -79,7 +79,9 @@ class Config:
         execution nondeterministic. It does not control data preparation.
         When every historical module field is overridden directly, this
         defaults to None without reading configuration files unless set
-        explicitly.
+        explicitly. With a partial override and no readable configuration
+        files, optional fields also fall back to their defaults; required
+        fields still raise.
     """
 
     imputers: dict[type[Imputer], dict[str, Any]]
@@ -151,8 +153,23 @@ def __getattr__(name: str) -> Any:
         ):
             globals()[name] = _CONFIG_DEFAULTS[name]
         else:
-            for field_name, value in vars(load_config()).items():
-                globals().setdefault(field_name, value)
+            try:
+                loaded = vars(load_config())
+            except FileNotFoundError:
+                # Partial historical overrides may intentionally omit files
+                # when every accessed setting is supplied. Only optional
+                # fields may fall back; an existing but incomplete file set
+                # must keep raising so configuration errors are not hidden.
+                if (
+                    name not in _CONFIG_DEFAULTS
+                    or DEFAULT_CONFIG_PATH.exists()
+                    or DEFAULT_HYPERPARAMETERS_PATH.exists()
+                ):
+                    raise
+                globals()[name] = _CONFIG_DEFAULTS[name]
+            else:
+                for field_name, value in loaded.items():
+                    globals().setdefault(field_name, value)
     return globals()[name]
 
 

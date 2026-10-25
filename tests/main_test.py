@@ -175,6 +175,84 @@ def test_main_reads_file_seed_for_partial_overrides(monkeypatch, tmp_path, profi
     assert calls["kwargs"] == expected_kwargs
 
 
+@pytest.mark.parametrize("profile", [False, True])
+def test_main_partial_overrides_without_config_files(monkeypatch, tmp_path, profile):
+    """Partial overrides keep working when every accessed setting is supplied."""
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+    calls: dict[str, Any] = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    class PassthroughProfiler:
+        def __init__(self, functions):
+            assert functions == [LinearImputer._execute]
+
+        def start_profile(self, function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        def dump_stats(self, path):
+            pass
+
+        def print_stats(self):
+            pass
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            plot_results=False,
+            profile=profile,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(entrypoint, "do_imputation", impute)
+        monkeypatch.setattr(entrypoint, "Profiler", PassthroughProfiler)
+        monkeypatch.setattr(
+            configuration, "DEFAULT_CONFIG_PATH", tmp_path / "missing.conf"
+        )
+        monkeypatch.setattr(
+            configuration,
+            "DEFAULT_HYPERPARAMETERS_PATH",
+            tmp_path / "missing-hyperparameters.conf",
+        )
+        entrypoint.main()
+
+    expected_kwargs: dict[str, int | None] = {"random_state": None}
+    if profile:
+        expected_kwargs["iterations"] = None
+    assert calls["kwargs"] == expected_kwargs
+
+
+def test_main_partial_overrides_do_not_mask_configuration_errors(monkeypatch, tmp_path):
+    config_path = tmp_path / "config.conf"
+    config_path.write_text(base_conf(imputers="LinearImputer"), encoding="utf-8")
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            plot_results=False,
+            profile=False,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(configuration, "DEFAULT_CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            configuration,
+            "DEFAULT_HYPERPARAMETERS_PATH",
+            tmp_path / "missing-hyperparameters.conf",
+        )
+        with pytest.raises(FileNotFoundError, match="hyperparameters file"):
+            entrypoint.main()
+
+
 def test_main_full_legacy_overrides_ignore_file_execution_seed(monkeypatch, tmp_path):
     """A complete legacy override set documents that files are not read."""
     config_path = tmp_path / "config.conf"
