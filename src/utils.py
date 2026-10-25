@@ -21,8 +21,8 @@ from src.imputation_plot import ImputationPlot
 # split_random_state() reserves SPLIT_RANDOM_STATE_CHILD_COUNT child streams
 # for preparation and missingness. Execution seeds use the following children:
 # their spawn keys are disjoint by construction, so execution cannot reuse a
-# reserved stream. Truncation to 32-bit values makes a value collision
-# negligible, though not mathematically impossible.
+# reserved stream. Four 32-bit words per child keep derived value collisions
+# negligible even for large iteration counts.
 
 
 def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | None]:
@@ -51,7 +51,10 @@ def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | 
     root = np.random.SeedSequence(random_state)
     children = root.spawn(SPLIT_RANDOM_STATE_CHILD_COUNT + count)
     return [
-        int(child.generate_state(1)[0])
+        sum(
+            int(word) << (32 * index)
+            for index, word in enumerate(child.generate_state(4))
+        )
         for child in children[SPLIT_RANDOM_STATE_CHILD_COUNT:]
     ]
 

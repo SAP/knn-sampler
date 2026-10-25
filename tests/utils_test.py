@@ -79,6 +79,15 @@ class TestExecutionSeeds:
         assert len(set(first.seeds)) == 3
         assert all(isinstance(seed, int) for seed in first.seeds)
 
+    def test_execution_seeds_retain_more_than_32_bits(
+        self, complete_data: DataFrameMLData
+    ):
+        imputer = RecordingImputer(complete_data)
+
+        do_imputation(imputer, iterations=3, random_state=42)
+
+        assert any(seed is not None and seed > 2**32 - 1 for seed in imputer.seeds)
+
     def test_seed_derivation_is_independent_of_imputer_order_and_count(
         self, complete_data: DataFrameMLData
     ):
@@ -144,8 +153,8 @@ class TestExecutionSeeds:
         ("execution_seed", "dataset_seed"),
         [
             (42, 42),
-            # Large execution and dataset seeds exercise multi-word entropy
-            # and 32-bit truncation; derived seeds must remain disjoint.
+            # Large execution and dataset seeds exercise multi-word entropy;
+            # derived execution seeds must remain disjoint from reserved streams.
             (42, 2**32 + 42),
             (0, 2**32),
             (42, 42 + (2 << 128)),
