@@ -21,6 +21,7 @@ from tests.config_test import base_conf, load_from_conf
 
 @pytest.mark.parametrize("loaded", [False, True])
 @pytest.mark.parametrize("plot", [False, True])
+@pytest.mark.parametrize("execution_seed", [pytest.param(None, id="unset"), 0, 17])
 @pytest.mark.parametrize(
     "profile,dump,print_stats",
     [
@@ -32,7 +33,7 @@ from tests.config_test import base_conf, load_from_conf
     ],
 )
 def test_main_honors_module_overrides(
-    monkeypatch, tmp_path, loaded, plot, profile, dump, print_stats
+    monkeypatch, tmp_path, loaded, plot, execution_seed, profile, dump, print_stats
 ):
     # Restore the complete module namespace, including attributes loaded lazily.
     with patch.dict(configuration.__dict__):
@@ -40,6 +41,8 @@ def test_main_honors_module_overrides(
             configuration.__dict__.pop(field.name, None)
         if loaded:
             assert configuration.imputers
+            # Historical callers never set settings added to Config later.
+            configuration.__dict__.pop("execution_random_state", None)
 
         preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
         destination = tmp_path / "not_written.pkl" if dump else None
@@ -52,6 +55,8 @@ def test_main_honors_module_overrides(
             profile_dump_path=destination,
             print_profile_stats=print_stats,
         )
+        if execution_seed is not None:
+            overrides["execution_random_state"] = execution_seed
         configuration.__dict__.update(overrides)
         calls: dict[str, Any] = {}
 
@@ -99,12 +104,241 @@ def test_main_honors_module_overrides(
         )
         entrypoint.main()
         assert calls["prepared"].df.equals(preparator.prepare_data().df)
-        assert calls["kwargs"] == ({"iterations": None} if profile else {})
+        expected_kwargs: dict[str, int | None] = {"random_state": execution_seed}
+        if profile:
+            expected_kwargs["iterations"] = None
+        assert calls["kwargs"] == expected_kwargs
         assert calls.get("profile", False) == profile
         assert calls.get("plot", False) == plot
         assert calls.get("dump") == destination
         assert calls.get("print", False) == print_stats
         assert not (tmp_path / "not_written.pkl").exists()
+
+
+@pytest.mark.parametrize("profile", [False, True])
+def test_main_reads_file_seed_for_partial_overrides(monkeypatch, tmp_path, profile):
+    """An incomplete override set still resolves unspecified settings from files."""
+    config_path = tmp_path / "config.conf"
+    config_path.write_text(
+        base_conf(
+            imputers="LinearImputer",
+            extra="\n[execution]\nexecution_random_state = 23",
+        ),
+        encoding="utf-8",
+    )
+    hyperparameters_path = tmp_path / "hyperparameters.conf"
+    hyperparameters_path.write_text("", encoding="utf-8")
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+    calls: dict[str, Any] = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    class PassthroughProfiler:
+        def __init__(self, functions):
+            assert functions == [LinearImputer._execute]
+
+        def start_profile(self, function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        def dump_stats(self, path):
+            pass
+
+        def print_stats(self):
+            pass
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        # missing_values is intentionally omitted: the override set is partial,
+        # so unspecified settings, including the execution seed, come from files.
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            plot_results=False,
+            profile=profile,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(entrypoint, "do_imputation", impute)
+        monkeypatch.setattr(entrypoint, "Profiler", PassthroughProfiler)
+        monkeypatch.setattr(configuration, "DEFAULT_CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            configuration, "DEFAULT_HYPERPARAMETERS_PATH", hyperparameters_path
+        )
+        entrypoint.main()
+
+    expected_kwargs: dict[str, int | None] = {"random_state": 23}
+    if profile:
+        expected_kwargs["iterations"] = None
+    assert calls["kwargs"] == expected_kwargs
+
+
+@pytest.mark.parametrize("profile", [False, True])
+def test_main_partial_overrides_without_config_files(monkeypatch, tmp_path, profile):
+    """Partial overrides keep working when every accessed setting is supplied."""
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+    calls: dict[str, Any] = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    class PassthroughProfiler:
+        def __init__(self, functions):
+            assert functions == [LinearImputer._execute]
+
+        def start_profile(self, function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        def dump_stats(self, path):
+            pass
+
+        def print_stats(self):
+            pass
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            plot_results=False,
+            profile=profile,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(entrypoint, "do_imputation", impute)
+        monkeypatch.setattr(entrypoint, "Profiler", PassthroughProfiler)
+        monkeypatch.setattr(
+            configuration, "DEFAULT_CONFIG_PATH", tmp_path / "missing.conf"
+        )
+        monkeypatch.setattr(
+            configuration,
+            "DEFAULT_HYPERPARAMETERS_PATH",
+            tmp_path / "missing-hyperparameters.conf",
+        )
+        entrypoint.main()
+
+    expected_kwargs: dict[str, int | None] = {"random_state": None}
+    if profile:
+        expected_kwargs["iterations"] = None
+    assert calls["kwargs"] == expected_kwargs
+
+
+def test_main_partial_overrides_do_not_mask_configuration_errors(monkeypatch, tmp_path):
+    config_path = tmp_path / "config.conf"
+    config_path.write_text(base_conf(imputers="LinearImputer"), encoding="utf-8")
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            plot_results=False,
+            profile=False,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(configuration, "DEFAULT_CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            configuration,
+            "DEFAULT_HYPERPARAMETERS_PATH",
+            tmp_path / "missing-hyperparameters.conf",
+        )
+        with pytest.raises(FileNotFoundError, match="hyperparameters file"):
+            entrypoint.main()
+
+
+def test_main_full_legacy_overrides_ignore_file_execution_seed(monkeypatch, tmp_path):
+    """A complete legacy override set documents that files are not read."""
+    config_path = tmp_path / "config.conf"
+    config_path.write_text(
+        base_conf(
+            imputers="LinearImputer",
+            extra="\n[execution]\nexecution_random_state = 23",
+        ),
+        encoding="utf-8",
+    )
+    hyperparameters_path = tmp_path / "hyperparameters.conf"
+    hyperparameters_path.write_text("", encoding="utf-8")
+    preparator = DataGenerator(1, 7, NoAdditionalMissingValues(), random_state=7)
+    calls: dict[str, Any] = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    with patch.dict(configuration.__dict__):
+        for field in fields(configuration.Config):
+            configuration.__dict__.pop(field.name, None)
+        configuration.__dict__.update(
+            data_preparator=preparator,
+            imputers={LinearImputer: {}},
+            missing_values=0,
+            profile=False,
+            plot_results=False,
+            profile_dump_path=None,
+            print_profile_stats=False,
+        )
+        monkeypatch.setattr(entrypoint, "do_imputation", impute)
+        monkeypatch.setattr(configuration, "DEFAULT_CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            configuration,
+            "DEFAULT_HYPERPARAMETERS_PATH",
+            hyperparameters_path,
+        )
+        monkeypatch.setattr(
+            configuration.configparser.ConfigParser,
+            "read",
+            lambda *args, **kwargs: pytest.fail(
+                "complete legacy overrides must not read configuration files"
+            ),
+        )
+        entrypoint.main()
+
+    assert calls["kwargs"] == {"random_state": None}
+
+
+def test_main_seeded_knnsampler_is_reproducible(tmp_path, monkeypatch):
+    """Configuration, main, and the real KnnSampler reproduce seeded output."""
+    config_text = (
+        base_conf(imputers="KnnSampler") + "\nrandom_state = 11\n\n[execution]\n"
+    )
+    hyperparameters = """
+[KnnSampler]
+n_neighbors = 3 : int
+compute_bounds = False : bool
+"""
+    captured: list[dict[Any, pd.DataFrame]] = []
+
+    def capture(results, *args, **kwargs):
+        captured.append(
+            {imputer: frame.copy() for imputer, (frame, _elapsed) in results.items()}
+        )
+
+    monkeypatch.setattr(entrypoint, "do_plot_results", capture)
+
+    def run(execution_seed: int) -> pd.DataFrame:
+        config = load_from_conf(
+            tmp_path,
+            f"{config_text}execution_random_state = {execution_seed}\n",
+            hyperparameters=hyperparameters,
+        )
+        config.plot_results = True
+        monkeypatch.setattr(entrypoint, "conf", config)
+        entrypoint.main()
+        return next(iter(captured[-1].values()))
+
+    first = run(17)
+    second = run(17)
+    other = run(18)
+
+    pd.testing.assert_frame_equal(first, second)
+    assert not first.equals(other)
 
 
 def test_main_reports_observed_size_for_all_rows(tmp_path, monkeypatch):
@@ -128,3 +362,26 @@ def test_main_reports_observed_size_for_all_rows(tmp_path, monkeypatch):
     )
     entrypoint.main()
     assert sizes == [2]
+
+
+@pytest.mark.parametrize("seed", [None, 0])
+def test_main_forwards_execution_seed(tmp_path, monkeypatch, seed):
+    config = load_from_conf(
+        tmp_path, base_conf(imputers="LinearImputer"), hyperparameters=""
+    )
+    config.plot_results = False
+    config.execution_random_state = seed
+    config.data_preparator = DataGenerator(
+        1, 7, NoAdditionalMissingValues(), random_state=7
+    )
+    monkeypatch.setattr(entrypoint, "conf", config)
+    calls = {}
+
+    def impute(*imputers, **kwargs):
+        calls["kwargs"] = kwargs
+        return {}
+
+    monkeypatch.setattr(entrypoint, "do_imputation", impute)
+    entrypoint.main()
+
+    assert calls["kwargs"] == {"random_state": seed}

@@ -1,7 +1,7 @@
 import configparser
 import warnings
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -74,6 +74,14 @@ class Config:
         Preparator producing the dataset to impute.
     missing_values : Rate | int
         Missing-value setting used by the preparator (rate or count).
+    execution_random_state : int | None
+        Optional run-level seed for stochastic imputations; None keeps each
+        execution nondeterministic. It does not control data preparation.
+        When every historical module field is overridden directly, this
+        defaults to None without reading configuration files unless set
+        explicitly. With a partial override and no readable configuration
+        files, optional fields also fall back to their defaults; required
+        fields still raise.
     """
 
     imputers: dict[type[Imputer], dict[str, Any]]
@@ -83,6 +91,7 @@ class Config:
     profile_dump_path: Path | None
     data_preparator: DataPreparator
     missing_values: Rate | int
+    execution_random_state: int | None = None
 
     def prepare_data_from_config(self) -> tuple[DataFrameMLData, pd.Series]:
         """Prepare the configured dataset.
@@ -95,7 +104,19 @@ class Config:
         return _prepare_data(self.data_preparator)
 
 
-_LEGACY_CONFIG_NAMES = tuple(field.name for field in fields(Config))
+_CONFIG_FIELDS = fields(Config)
+_LEGACY_CONFIG_NAMES = tuple(field.name for field in _CONFIG_FIELDS)
+# Fields without a default form the complete historical namespace. Once every
+# one of them is overridden, optional fields resolve to their dataclass default
+# without touching configuration files: the caller fully describes the run.
+_REQUIRED_CONFIG_NAMES = tuple(
+    field.name for field in _CONFIG_FIELDS if field.default is MISSING
+)
+_CONFIG_DEFAULTS = {
+    field.name: field.default
+    for field in _CONFIG_FIELDS
+    if field.default is not MISSING
+}
 
 # reload() retains the module namespace; discard previously cached settings.
 for _legacy_name in _LEGACY_CONFIG_NAMES:
@@ -127,8 +148,28 @@ def __getattr__(name: str) -> Any:
     if name not in _LEGACY_CONFIG_NAMES:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     if name not in globals():
-        for field_name, value in vars(load_config()).items():
-            globals().setdefault(field_name, value)
+        if name in _CONFIG_DEFAULTS and all(
+            required in globals() for required in _REQUIRED_CONFIG_NAMES
+        ):
+            globals()[name] = _CONFIG_DEFAULTS[name]
+        else:
+            try:
+                loaded = vars(load_config())
+            except FileNotFoundError:
+                # Partial historical overrides may intentionally omit files
+                # when every accessed setting is supplied. Only optional
+                # fields may fall back; an existing but incomplete file set
+                # must keep raising so configuration errors are not hidden.
+                if (
+                    name not in _CONFIG_DEFAULTS
+                    or DEFAULT_CONFIG_PATH.exists()
+                    or DEFAULT_HYPERPARAMETERS_PATH.exists()
+                ):
+                    raise
+                globals()[name] = _CONFIG_DEFAULTS[name]
+            else:
+                for field_name, value in loaded.items():
+                    globals().setdefault(field_name, value)
     return globals()[name]
 
 
@@ -199,22 +240,37 @@ def _parse_missing_values(fields: configparser.SectionProxy, name: str) -> Rate 
         ) from e
 
 
-def _parse_random_state(fields: configparser.SectionProxy, name: str) -> int | None:
-    """Parse a non-negative random_state (blank or absent means None)."""
-    raw = fields.get("random_state")
+def _parse_seed(raw: str | None, option: str, context: str) -> int | None:
+    """Parse an optional non-negative integer seed (blank or absent is None)."""
     if raw is None or raw.strip() == "":
         return None
     message = (
-        f"random_state should be a non-negative integer or left blank, got '{raw}'"
-        f" for dataset {name}"
+        f"{option} should be a non-negative integer or left blank, got '{raw}'"
+        f" for {context}"
     )
     try:
-        random_state = int(raw)
+        seed = int(raw)
     except ValueError as e:
         raise ValueError(message) from e
-    if random_state < 0:
+    if seed < 0:
         raise ValueError(message)
-    return random_state
+    return seed
+
+
+def _parse_random_state(fields: configparser.SectionProxy, name: str) -> int | None:
+    """Parse a non-negative dataset random_state (blank or absent means None)."""
+    return _parse_seed(fields.get("random_state"), "random_state", f"dataset {name}")
+
+
+def _parse_execution_random_state(
+    conf: configparser.ConfigParser,
+) -> int | None:
+    """Parse the optional execution seed (absent or blank means None)."""
+    return _parse_seed(
+        conf.get("execution", "execution_random_state", fallback=None),
+        "execution_random_state",
+        "execution configuration",
+    )
 
 
 def _extract_data_preparator(
@@ -346,6 +402,7 @@ def load_config(
         _resolve_path(raw_dump_path) if _strip_quotes(raw_dump_path).strip() else None
     )
     print_profile_stats = conf["profile"].get("print_stats") == "True"
+    execution_random_state = _parse_execution_random_state(conf)
     used_dataset_config = conf["dataset_selection"]["used_dataset"]
     try:
         dataset_fields = conf[used_dataset_config]
@@ -417,4 +474,5 @@ def load_config(
         profile_dump_path=profile_dump_path,
         data_preparator=data_preparator,
         missing_values=missing_values,
+        execution_random_state=execution_random_state,
     )

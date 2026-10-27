@@ -18,14 +18,19 @@ def main() -> None:
     results: dict[Imputer, tuple[pd.DataFrame, float]]
     if config.profile:
         profiler = Profiler([imp_class._execute for imp_class in config.imputers])
-        results = profiler.start_profile(do_imputation, *imputers, iterations=None)
+        results = profiler.start_profile(
+            do_imputation,
+            *imputers,
+            iterations=None,
+            random_state=config.execution_random_state,
+        )
         if config.profile_dump_path is not None:
             profiler.dump_stats(config.profile_dump_path)
         if config.print_profile_stats:
             profiler.print_stats()
 
     else:
-        results = do_imputation(*imputers)
+        results = do_imputation(*imputers, random_state=config.execution_random_state)
     print("\nImputation done, plotting results...")
     if config.plot_results:
         do_plot_results(

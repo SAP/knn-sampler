@@ -145,6 +145,33 @@ def test_legacy_lazy_load_preserves_early_overrides(monkeypatch):
     assert len(prepared.df) == 10
 
 
+@pytest.mark.parametrize("complete", [False, True])
+def test_optional_legacy_field_skips_load_for_complete_overrides(monkeypatch, complete):
+    name = "assets._optional_legacy_config_test"
+    spec = importlib.util.spec_from_file_location(name, configuration.__file__)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    spec.loader.exec_module(module)
+    for field in fields(module.Config):
+        if field.name == "execution_random_state":
+            continue
+        if not complete and field.name == "missing_values":
+            continue
+        module.__dict__[field.name] = object()
+
+    def load_config():
+        raise AssertionError("optional field read configuration")
+
+    monkeypatch.setattr(module, "load_config", load_config)
+    if complete:
+        assert module.execution_random_state is None
+        assert module.__dict__["execution_random_state"] is None
+    else:
+        with pytest.raises(AssertionError, match="read configuration"):
+            _ = module.execution_random_state
+
+
 BASE_CONF_TEMPLATE = """
 [imputation_algorithms]
 imputation_algorithms = {imputers}
@@ -247,6 +274,9 @@ class TestLoadConfigDefaults:
         assert isinstance(config.profile, bool)
         assert config.profile_dump_path is None or isinstance(
             config.profile_dump_path, Path
+        )
+        assert config.execution_random_state is None or isinstance(
+            config.execution_random_state, int
         )
 
 
@@ -411,6 +441,47 @@ n_neighbors = 5 : int
 """
         with pytest.warns(UserWarning, match="Bogus"):
             load_from_conf(tmp_path, base_conf(), hyperparameters)
+
+
+class TestExecutionSeed:
+    def test_execution_random_state_is_parsed(self, tmp_path):
+        conf = base_conf(extra="\n[execution]\nexecution_random_state = 123")
+        config = load_from_conf(tmp_path, conf)
+        assert config.execution_random_state == 123
+
+    @pytest.mark.parametrize(
+        "extra",
+        ["", "\n[execution]\nexecution_random_state ="],
+    )
+    def test_missing_or_blank_execution_seed_is_none(self, tmp_path, extra):
+        config = load_from_conf(tmp_path, base_conf(extra=extra))
+        assert config.execution_random_state is None
+
+    def test_seed_zero_is_valid(self, tmp_path):
+        conf = base_conf(extra="\n[execution]\nexecution_random_state = 0")
+        assert load_from_conf(tmp_path, conf).execution_random_state == 0
+
+    @pytest.mark.parametrize("raw", ["-1", "abc"])
+    def test_invalid_execution_seed_raises(self, tmp_path, raw):
+        conf = base_conf(extra=f"\n[execution]\nexecution_random_state = {raw}")
+        with pytest.raises(
+            ValueError,
+            match=rf"execution_random_state.*non-negative integer.*{re.escape(raw)}"
+            ".*execution configuration",
+        ):
+            load_from_conf(tmp_path, conf)
+
+    def test_execution_seed_does_not_change_dataset_seeds(self, tmp_path):
+        conf = base_conf(
+            extra="random_state = 7\n[execution]\nexecution_random_state = 42"
+        )
+        config = load_from_conf(tmp_path, conf)
+        preparation_seed, missingness_seed = split_random_state(7)
+
+        assert config.execution_random_state == 42
+        assert config.data_preparator.random_state == preparation_seed
+        assert isinstance(config.data_preparator.missing_generator, (Mcar, Mar))
+        assert config.data_preparator.missing_generator.random_state == missingness_seed
 
 
 class TestDatasetFields:

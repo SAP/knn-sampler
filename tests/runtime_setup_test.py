@@ -153,7 +153,8 @@ with patch.object(configparser.ConfigParser, 'read', side_effect=AssertionError(
     import main
     from assets.config import Config, load_config, get_field
     legacy = {'imputers', 'plot_results', 'profile', 'print_profile_stats',
-              'profile_dump_path', 'data_preparator', 'missing_values'}
+              'profile_dump_path', 'data_preparator', 'missing_values',
+              'execution_random_state'}
     assert legacy.isdisjoint(vars(config))
     public = legacy | {'DEFAULT_CONFIG_PATH', 'DEFAULT_HYPERPARAMETERS_PATH',
                        'PROJECT_ROOT', 'Config', 'get_field', 'load_config',

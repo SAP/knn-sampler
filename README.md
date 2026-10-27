@@ -60,7 +60,28 @@ poetry run task main
 
 Runs the main imputation pipeline using [`assets/config.conf`](./assets/config.conf).
 
-For use from Python, load settings with `assets.config.load_config()`.
+For reproducible seeded KnnSampler runs, set the dataset `random_state` and
+`[execution] execution_random_state` in
+[`assets/config.conf`](./assets/config.conf). The dataset seed controls data
+preparation and missing-value selection; the execution seed controls sampling
+for imputers that honor it. Each `do_imputation(..., iterations=N)` iteration
+receives an independent derived seed, while `task main` runs one execution per
+imputer. Leave the execution seed blank to run unseeded. `KNNxKDEImputer` uses
+global randomness internally and is not fully reproducible.
+
+`KnnSampler`'s K-fold selection uses `optimal_k_random_state` (default `42`,
+integer in `[0, 4294967295]`; `None` is Python-API-only) in the `[KnnSampler]`
+section of [`assets/hyperparameters.conf`](./assets/hyperparameters.conf). The
+scaler is fitted on each training fold; `loo_penalized` keeps global scaling
+on all complete-case rows. The value is validated for every method, but only
+`kfold` uses it.
+
+For Python use, load settings with `assets.config.load_config()`. Legacy
+module-level overrides remain supported. A complete set of required fields
+avoids configuration-file I/O; optional fields use their defaults unless set
+explicitly. When both configuration files are absent, partial overrides also
+use optional defaults; required fields still raise. A present but incomplete
+file set still reports the configuration error.
 
 ### Benchmark algorithms
 

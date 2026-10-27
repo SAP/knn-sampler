@@ -4,40 +4,115 @@ from collections import defaultdict
 from collections.abc import Generator, Mapping
 from typing import Any, Literal, overload
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm, trange
 
 from src.data_preparation.data_description import DataFrameMLData
-from src.data_preparation.data_preparation import Rate
+from src.data_preparation.data_preparation import (
+    SPLIT_RANDOM_STATE_CHILD_COUNT,
+    Rate,
+)
 from src.imputation import Imputer
-from src.imputation.imputer import UncertaintyImputer
+from src.imputation.imputer import UncertaintyImputer, validate_random_state
 from src.imputation_context import ImputationContext
 from src.imputation_plot import ImputationPlot
+
+# split_random_state() reserves SPLIT_RANDOM_STATE_CHILD_COUNT child streams
+# for preparation and missingness. Execution seeds use the following children:
+# their spawn keys are disjoint by construction, so execution cannot reuse a
+# reserved stream. Four 32-bit words per child keep derived value collisions
+# negligible even for large iteration counts.
+
+
+def _derive_execution_seeds(random_state: int | None, count: int) -> list[int | None]:
+    """Derive one execution seed per iteration from an optional run seed.
+
+    Parameters
+    ----------
+    random_state : int | None
+        Run-level seed. None keeps every execution nondeterministic.
+    count : int
+        Number of iterations to derive seeds for.
+
+    Returns
+    -------
+    list[int | None]
+        One Python integer seed per iteration, or None values when unseeded.
+
+    Raises
+    ------
+    ValueError
+        If random_state is not a non-negative integer or None.
+    """
+    random_state = validate_random_state(random_state)
+    if random_state is None:
+        return [None] * count
+    root = np.random.SeedSequence(random_state)
+    children = root.spawn(SPLIT_RANDOM_STATE_CHILD_COUNT + count)
+    return [
+        sum(
+            int(word) << (32 * index)
+            for index, word in enumerate(child.generate_state(4))
+        )
+        for child in children[SPLIT_RANDOM_STATE_CHILD_COUNT:]
+    ]
 
 
 @overload
 def do_imputation(
-    *imputers: Imputer, iterations: Literal[None] = None
+    *imputers: Imputer,
+    iterations: Literal[None] = None,
+    random_state: int | None = None,
 ) -> dict[Imputer, tuple[pd.DataFrame, float]]: ...
 
 
 @overload
 def do_imputation(
-    *imputers: Imputer, iterations: int
+    *imputers: Imputer,
+    iterations: int,
+    random_state: int | None = None,
 ) -> dict[Imputer, list[tuple[pd.DataFrame, float]]]: ...
 
 
 def do_imputation(
-    *imputers: Imputer, iterations: int | None = None
+    *imputers: Imputer,
+    iterations: int | None = None,
+    random_state: int | None = None,
 ) -> (
     dict[Imputer, tuple[pd.DataFrame, float]]
     | dict[Imputer, list[tuple[pd.DataFrame, float]]]
 ):
+    """Run all given imputers, optionally with multiple imputations.
+
+    Parameters
+    ----------
+    *imputers : Imputer
+        Imputers to fit and execute.
+    iterations : int | None
+        Number of imputation iterations per imputer. None runs one execution.
+    random_state : int | None
+        Run-level seed for stochastic imputations. It is expanded into one
+        independent seed per iteration, and every imputer receives the same
+        per-iteration seed, so seed assignment does not depend on imputer
+        order. Results are order-independent only for imputers that honor the
+        seed without consuming global randomness. None leaves stochastic
+        imputations unseeded.
+
+    Returns
+    -------
+    dict[Imputer, tuple[pd.DataFrame, float]]
+        If iterations is None, one timed result per imputer.
+    dict[Imputer, list[tuple[pd.DataFrame, float]]]
+        Otherwise, one timed result per imputer and iteration.
+
+    Raises
+    ------
+    ValueError
+        If random_state is not a non-negative integer or None.
     """
-    Gives imputation results for all given imputers, for each iterations <br>
-    returns -> dict[Imputer, list[tuple[pd.DataFrame, float]]] if iterations is set <br>
-    returns -> dict[Imputer, tuple[pd.DataFrame, float]] else
-    """
+    seed_count = 1 if iterations is None else max(iterations, 0)
+    execution_seeds = _derive_execution_seeds(random_state, seed_count)
     if iterations is None:
         result: dict[Imputer, tuple[pd.DataFrame, float]] = {}
         for imputer in (bar := tqdm(imputers, leave=False)):
@@ -45,7 +120,10 @@ def do_imputation(
             start = time.perf_counter()
             imputer.fit()
             bar.set_description(f"Imputing missing data with {imputer.get_name()}:")
-            result[imputer] = imputer.execute(), time.perf_counter() - start
+            result[imputer] = (
+                imputer.execute(execution_seeds[0]),
+                time.perf_counter() - start,
+            )
         return result
     results: dict[Imputer, list[tuple[pd.DataFrame, float]]] = defaultdict(list)
     for imputer in (bar := tqdm(imputers, leave=False)):
@@ -54,9 +132,9 @@ def do_imputation(
         imputer.fit()
         fit_time = time.perf_counter() - start_fit
         bar.set_description(f"Imputing missing data with {imputer.get_name()}:")
-        for _ in trange(iterations):
+        for iteration in trange(iterations):
             start = time.perf_counter()
-            res = imputer.execute()
+            res = imputer.execute(execution_seeds[iteration])
             results[imputer].append((res, fit_time + (time.perf_counter() - start)))
     return results
 

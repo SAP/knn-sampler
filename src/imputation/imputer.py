@@ -1,9 +1,46 @@
 from abc import ABC, abstractmethod
+from numbers import Integral
 from typing import overload
 
 import pandas as pd
 
 from src.data_preparation.data_description import DataFrameMLData
+
+
+def validate_random_state(
+    random_state: int | None, *, option: str = "random_state"
+) -> int | None:
+    """Validate and normalize an optional non-negative random seed.
+
+    Parameters
+    ----------
+    random_state : int | None
+        Seed to validate. NumPy integers are accepted and normalized to Python
+        integers; booleans are rejected.
+    option : str
+        Option name used in the error message.
+
+    Returns
+    -------
+    int | None
+        Normalized seed, or None when no seed is provided.
+
+    Raises
+    ------
+    ValueError
+        If random_state is a boolean, not an integer, or negative.
+    """
+    if random_state is None:
+        return None
+    if (
+        isinstance(random_state, bool)
+        or not isinstance(random_state, Integral)
+        or random_state < 0
+    ):
+        raise ValueError(
+            f"{option} must be a non-negative integer or None, got {random_state!r}"
+        )
+    return int(random_state)
 
 
 class Imputer(ABC):
