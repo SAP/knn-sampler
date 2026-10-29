@@ -5,6 +5,7 @@
     "abandonments:recommended",
     ":configMigration",
     "helpers:pinGitHubActionDigests",
+    "security:minimumReleaseAgePypi",
     "group:allNonMajor",
     "schedule:daily",
     ":maintainLockFilesWeekly"
