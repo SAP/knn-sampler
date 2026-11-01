@@ -304,29 +304,26 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
             sample_size=sample_size,
             random_state=random_state,
         )
+        if sample_size is not None and sample_size < 1:
+            raise ValueError(f"sample_size must be >= 1 or None, got {sample_size}")
         self.columns_to_keep = columns_to_keep if columns_to_keep is not None else []
 
     def prepare_data(self) -> DataFrameMLData:
-        if self.sample_size is None:
-            df = pd.read_excel(
-                io=self.dataset_descriptor.path,
-                sheet_name=self.dataset_descriptor.sheet_name,
-                usecols=[
-                    self.dataset_descriptor.input_column,
-                    self.dataset_descriptor.target_column,
-                    *self.columns_to_keep,
-                ],
-            )
-        else:
-            df = pd.read_excel(
-                io=self.dataset_descriptor.path,
-                sheet_name=self.dataset_descriptor.sheet_name,
-                usecols=[
-                    self.dataset_descriptor.input_column,
-                    self.dataset_descriptor.target_column,
-                    *self.columns_to_keep,
-                ],
-            ).sample(self.sample_size, random_state=self.random_state)
+        df = pd.read_excel(
+            io=self.dataset_descriptor.path,
+            sheet_name=self.dataset_descriptor.sheet_name,
+            usecols=[
+                self.dataset_descriptor.input_column,
+                self.dataset_descriptor.target_column,
+                *self.columns_to_keep,
+            ],
+        )
+        if self.sample_size is not None:
+            if self.sample_size > len(df):
+                raise ValueError(
+                    f"sample_size ({self.sample_size}) exceeds dataset size ({len(df)})"
+                )
+            df = df.sample(self.sample_size, random_state=self.random_state)
 
         # rename columns
         df = df.rename(
@@ -387,6 +384,8 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
                 f"geometry_type must be one of: {', '.join(repr(g) for g in GEOMETRY_TYPES)},"
                 f" got '{geometry_type}'"
             )
+        if sample_size < 1:
+            raise ValueError(f"sample_size must be >= 1, got {sample_size}")
         super().__init__(
             dataset_descriptor=(
                 DatasetDescriptor("X", "Y")

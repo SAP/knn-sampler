@@ -38,6 +38,24 @@ def test_mar_rejects_nan_chunk_bounds():
         Mar(chunk_start=float("nan"), chunk_end=2.0, missing_values=1)
 
 
+def test_data_generator_rejects_non_positive_sample_size():
+    with pytest.raises(ValueError, match="sample_size must be >= 1"):
+        DataGenerator(
+            linear_interpolation_ratio=1.0,
+            sample_size=0,
+            missing_generator=NoAdditionalMissingValues(),
+        )
+
+
+def test_excel_preparator_rejects_non_positive_sample_size():
+    with pytest.raises(ValueError, match="sample_size must be >= 1"):
+        ExcelDataPreparator(
+            ExcelDatasetDescriptor("input", "target", "x.xlsx", "sheet"),
+            NoAdditionalMissingValues(),
+            sample_size=0,
+        )
+
+
 def test_spawned_seeds_are_replayable_and_separate():
     first, second = split_random_state(42)
     assert (first, second) == split_random_state(42)
