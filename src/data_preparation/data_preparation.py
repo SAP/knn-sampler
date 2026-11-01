@@ -408,7 +408,7 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
                 y = self.linear_interpolation_ratio * x + epsilon
 
             case "ring":
-                theta = np.linspace(0, 2 * np.pi, self.sample_size)
+                theta = np.linspace(0, 2 * np.pi, self.sample_size, endpoint=False)
                 epsilon = rng.normal(0, 0.1, self.sample_size)
                 r = 1 + epsilon
                 x = np.cos(theta) * r
