@@ -248,8 +248,6 @@ class ImputationPlot:
         ax.legend()
 
     def show(self, block=True):
-        for fig in self.figures:
-            fig.show()
         if block:
             plt.show(block=True)
 

@@ -24,6 +24,20 @@ from src.data_preparation.dataset_description import (
 )
 
 
+def test_mar_rejects_inverted_chunk_range():
+    with pytest.raises(
+        ValueError, match="chunk_start must be strictly less than chunk_end"
+    ):
+        Mar(chunk_start=5.0, chunk_end=2.0, missing_values=1)
+
+
+def test_mar_rejects_nan_chunk_bounds():
+    with pytest.raises(
+        ValueError, match="chunk_start must be strictly less than chunk_end"
+    ):
+        Mar(chunk_start=float("nan"), chunk_end=2.0, missing_values=1)
+
+
 def test_spawned_seeds_are_replayable_and_separate():
     first, second = split_random_state(42)
     assert (first, second) == split_random_state(42)

@@ -152,7 +152,7 @@ class KNNxKDE:
             Returns None if imputation cannot be performed (no suitable donors).
         """
         (_n, d) = miss_data.shape
-        sigmas = np.nanstd(miss_data, axis=0)
+        sigmas = np.nan_to_num(np.nanstd(miss_data, axis=0), nan=1.0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_samples = {}
 
@@ -183,6 +183,11 @@ class KNNxKDE:
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
+            p_ij = np.nan_to_num(p_ij, nan=0.0, posinf=0.0, neginf=0.0)
+            row_sums = p_ij.sum(axis=1, keepdims=True)
+            if np.any(row_sums == 0):
+                uniform = np.full_like(p_ij, 1.0 / p_ij.shape[1])
+                p_ij = np.where(row_sums == 0, uniform, p_ij)
 
             for i1 in range(len(id_receivers)):
                 probs = p_ij[i1]
@@ -218,7 +223,7 @@ class KNNxKDE:
             Returns None if imputation cannot be performed.
         """
         (_n, d) = miss_data.shape
-        sigmas = np.nanstd(miss_data, axis=0)
+        sigmas = np.nan_to_num(np.nanstd(miss_data, axis=0), nan=1.0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_data = np.copy(miss_data)
 
@@ -249,6 +254,11 @@ class KNNxKDE:
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
+            p_ij = np.nan_to_num(p_ij, nan=0.0, posinf=0.0, neginf=0.0)
+            row_sums = p_ij.sum(axis=1, keepdims=True)
+            if np.any(row_sums == 0):
+                uniform = np.full_like(p_ij, 1.0 / p_ij.shape[1])
+                p_ij = np.where(row_sums == 0, uniform, p_ij)
 
             for i1 in range(len(id_receivers)):
                 probs = p_ij[i1]
@@ -284,7 +294,7 @@ class KNNxKDE:
             for each missing pattern.
         """
         (_n, d) = miss_data.shape
-        sigmas = np.nanstd(miss_data, axis=0)
+        sigmas = np.nan_to_num(np.nanstd(miss_data, axis=0), nan=1.0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         cells_distrib = {}  # store (weights, values)
 
@@ -315,6 +325,11 @@ class KNNxKDE:
 
             d_ij[np.isnan(d_ij)] = np.inf
             p_ij = softmax(-d_ij / self.tau, axis=1)
+            p_ij = np.nan_to_num(p_ij, nan=0.0, posinf=0.0, neginf=0.0)
+            row_sums = p_ij.sum(axis=1, keepdims=True)
+            if np.any(row_sums == 0):
+                uniform = np.full_like(p_ij, 1.0 / p_ij.shape[1])
+                p_ij = np.where(row_sums == 0, uniform, p_ij)
 
             for i1 in range(len(id_receivers)):
                 for i2 in range(d):

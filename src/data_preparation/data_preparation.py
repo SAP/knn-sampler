@@ -178,6 +178,11 @@ class Mar(MissingDataGenerator):
                 f"missing_values should be a non-negative integer or a Rate,"
                 f" got '{missing_values}'"
             )
+        if not chunk_start < chunk_end:
+            raise ValueError(
+                "chunk_start must be strictly less than chunk_end, "
+                f"got chunk_start={chunk_start}, chunk_end={chunk_end}"
+            )
         self.chunk_start = chunk_start
         self.chunk_end = chunk_end
         self.missing_values = missing_values
