@@ -382,9 +382,16 @@ class KnnSampler(UncertaintyImputer):
         """Select optimal k via penalized leave-one-out MSE.
 
         For each candidate k, forms leave-one-out predictions using neighborhoods
-        excluding the sample itself. Applies multiplicative penalty ((k+1)^2 / k^2)
-        favoring smaller k when MSE differences are marginal. Returns k with
-        minimal penalized MSE.
+        excluding the sample itself. Applies a multiplicative penalty
+        ((k+1)^2 / k^2) that penalizes small k when MSE differences are
+        marginal. Returns k with minimal penalized MSE.
+
+        The fast LOO computation (scaling by (k+1)^2/k^2) is from Kanagawa
+        (2024), "Fast computation of leave-one-out cross-validation for k-NN
+        regression", Transactions on Machine Learning Research, 2024.
+        arXiv:2405.04919 (https://arxiv.org/abs/2405.04919). The penalty is
+        an additional shrinkage on top of the LOO score; the kNNSampler paper
+        (Section 2.3) uses plain LOOCV without this extra penalty.
 
         Parameters
         ----------
