@@ -446,36 +446,41 @@ class KnnSampler(UncertaintyImputer):
                 adjusted_score = mse * ((k + 1) ** 2 / (k**2))
                 scores.append(adjusted_score)
         else:  # distance weighting
-            # For each k slice distances & targets then compute inverse-distance weighted average
+            # For each k slice distances & targets then compute inverse-distance
+            # weighted average. Vectorized over samples; numerical results match
+            # the scalar implementation (same summation order and fallbacks).
+            eps = np.finfo(float).eps
+            tiny = np.finfo(float).tiny
             for k in k_values:
                 d_k = distances_excl[:, :k]
                 t_k = neighbor_targets[:, :k]
-                # Zero distance (or numerically ~0) handling
-                zero_mask_array = np.isclose(d_k, 0.0)
-                any_zero = np.any(zero_mask_array, axis=1)
-                preds = np.empty(n_train_samples, dtype=float)
-
-                for i in range(n_train_samples):
-                    row_targets = t_k[i, :]
-                    if any_zero[i]:
-                        # Average only zero-distance (or near-zero) targets
-                        zero_targets = row_targets[zero_mask_array[i, :]]
-                        preds[i] = float(np.mean(zero_targets))
-                    else:
-                        row_distances = d_k[i, :]
-                        safe_distances = np.maximum(row_distances, np.finfo(float).eps)
-                        weights_array = 1.0 / safe_distances
-                        numerator = float(np.sum(weights_array * row_targets))
-                        denominator = float(np.sum(weights_array))
-                        # Fallback for extreme numerical stability issues.
-                        if (
-                            not np.isfinite(denominator)
-                            or denominator < np.finfo(float).tiny
-                        ):
-                            preds[i] = float(np.mean(row_targets))
-                        else:
-                            preds[i] = numerator / denominator
-
+                zero_mask = np.isclose(d_k, 0.0)
+                any_zero = zero_mask.any(axis=1)
+                safe_distances = np.maximum(d_k, eps)
+                weights = np.where(zero_mask, 0.0, 1.0 / safe_distances)
+                numerator = np.sum(weights * t_k, axis=1)
+                denominator = np.sum(weights, axis=1)
+                row_mean = np.mean(t_k, axis=1)
+                bad_denom = (~np.isfinite(denominator)) | (denominator < tiny)
+                zero_counts = zero_mask.sum(axis=1)
+                zero_sums = np.sum(np.where(zero_mask, t_k, 0.0), axis=1)
+                zero_mean = np.where(
+                    zero_counts > 0,
+                    zero_sums / np.where(zero_counts > 0, zero_counts, 1),
+                    row_mean,
+                )
+                safe_denom = np.where(denominator == 0, 1.0, denominator)
+                # Avoid evaluating the division on rows with a bad denominator,
+                # which can overflow and emit warnings even though the result is
+                # discarded by np.where.
+                division = np.divide(
+                    numerator,
+                    safe_denom,
+                    out=np.zeros_like(numerator),
+                    where=~bad_denom,
+                )
+                nonzero_pred = np.where(bad_denom, row_mean, division)
+                preds = np.where(any_zero, zero_mean, nonzero_pred)
                 mse = self._calculate_mse(y_train, preds)
                 adjusted_score = mse * ((k + 1) ** 2 / (k**2))
                 scores.append(adjusted_score)
