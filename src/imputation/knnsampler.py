@@ -456,31 +456,35 @@ class KnnSampler(UncertaintyImputer):
                 t_k = neighbor_targets[:, :k]
                 zero_mask = np.isclose(d_k, 0.0)
                 any_zero = zero_mask.any(axis=1)
-                safe_distances = np.maximum(d_k, eps)
-                weights = np.where(zero_mask, 0.0, 1.0 / safe_distances)
-                numerator = np.sum(weights * t_k, axis=1)
-                denominator = np.sum(weights, axis=1)
-                row_mean = np.mean(t_k, axis=1)
-                bad_denom = (~np.isfinite(denominator)) | (denominator < tiny)
-                zero_counts = zero_mask.sum(axis=1)
-                zero_sums = np.sum(np.where(zero_mask, t_k, 0.0), axis=1)
-                zero_mean = np.where(
-                    zero_counts > 0,
-                    zero_sums / np.where(zero_counts > 0, zero_counts, 1),
-                    row_mean,
-                )
-                safe_denom = np.where(denominator == 0, 1.0, denominator)
-                # Avoid evaluating the division on rows with a bad denominator,
-                # which can overflow and emit warnings even though the result is
-                # discarded by np.where.
-                division = np.divide(
-                    numerator,
-                    safe_denom,
-                    out=np.zeros_like(numerator),
-                    where=~bad_denom,
-                )
-                nonzero_pred = np.where(bad_denom, row_mean, division)
-                preds = np.where(any_zero, zero_mean, nonzero_pred)
+                # Process samples in bounded chunks to keep peak memory O(chunk*k)
+                # instead of materializing full O(n*k) temporaries (see review).
+                preds = np.empty(n_train_samples, dtype=float)
+                chunk_size = max(1, min(n_train_samples, 10_000_000 // max(k, 1)))
+                for start in range(0, n_train_samples, chunk_size):
+                    stop = min(start + chunk_size, n_train_samples)
+                    d_c = d_k[start:stop]
+                    t_c = t_k[start:stop]
+                    zm_c = zero_mask[start:stop]
+                    az_c = any_zero[start:stop]
+                    safe_d = np.maximum(d_c, eps)
+                    w = np.where(zm_c, 0.0, 1.0 / safe_d)
+                    num = np.sum(w * t_c, axis=1)
+                    den = np.sum(w, axis=1)
+                    row_mean = np.mean(t_c, axis=1)
+                    bad_denom = (~np.isfinite(den)) | (den < tiny)
+                    zc = zm_c.sum(axis=1)
+                    zs = np.sum(np.where(zm_c, t_c, 0.0), axis=1)
+                    zero_mean = np.where(
+                        zc > 0,
+                        zs / np.where(zc > 0, zc, 1),
+                        row_mean,
+                    )
+                    safe_den = np.where(den == 0, 1.0, den)
+                    division = np.divide(
+                        num, safe_den, out=np.zeros_like(num), where=~bad_denom
+                    )
+                    nonzero_pred = np.where(bad_denom, row_mean, division)
+                    preds[start:stop] = np.where(az_c, zero_mean, nonzero_pred)
                 mse = self._calculate_mse(y_train, preds)
                 adjusted_score = mse * ((k + 1) ** 2 / (k**2))
                 scores.append(adjusted_score)
