@@ -248,8 +248,14 @@ class ImputationPlot:
         ax.legend()
 
     def show(self, block=True):
-        if block:
-            plt.show(block=True)
+        backend = plt.get_backend().lower()
+        if backend in {"agg", "svg", "pdf", "ps", "cairo", "template"}:
+            # Non-interactive backends cannot display figures; skip to avoid
+            # "FigureCanvas... cannot be shown" warnings.
+            return
+        for fig in self.figures:
+            fig.show()
+        plt.show(block=block)
 
     def close_all(self):
         """Close all figures created by this instance"""
