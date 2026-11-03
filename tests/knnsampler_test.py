@@ -161,6 +161,32 @@ class TestOptimalKSelection(unittest.TestCase):
         sampler.fit()
         self.assertIn(sampler.optimal_k, {1, 2})
 
+    def test_distance_weighted_loo_returns_valid_k(self):
+        """Regression: distance-weighted k selection must not crash and yield a
+        valid k (exercises the vectorized distance branch)."""
+        sampler = KnnSampler(
+            make_ml_data(total_size=10, complete_size=4),
+            compute_bounds=False,
+            strategy="mean",
+            weights="distance",
+            optimal_k_method="loo_penalized",
+        )
+        sampler.fit()
+        self.assertEqual(sampler.optimal_k, 2)
+
+    def test_distance_weighted_kfold_returns_valid_k(self):
+        """Regression: distance-weighted kfold selection stays in bounds."""
+        sampler = KnnSampler(
+            make_ml_data(total_size=10, complete_size=4),
+            compute_bounds=False,
+            strategy="mean",
+            weights="distance",
+            optimal_k_method="kfold",
+            optimal_k_cv_folds=3,
+        )
+        sampler.fit()
+        self.assertEqual(sampler.optimal_k, 2)
+
     def test_fit_with_empty_training_data_raises(self):
         """A dataset with no complete target row must raise a clear
         ValueError, not an obscure scikit-learn error."""
