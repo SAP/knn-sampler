@@ -42,7 +42,8 @@ class KNNxKDEImputer(Imputer):
         Parameters
         ----------
         random_state : int | None
-            Seed for reproducible sampling.
+            Seed for the final per-cell draw. Candidate generation uses the
+            global NumPy RNG and is not fully reproducible (see README).
 
         Returns
         -------

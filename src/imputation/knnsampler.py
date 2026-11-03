@@ -95,8 +95,9 @@ class KnnSampler(UncertaintyImputer):
         Neighbor weighting strategy.
     optimal_k_method : {'loo_penalized', 'kfold'}
          Method used when n_neighbors is None:
-         - 'loo_penalized': leave-one-out penalized MSE criterion.
-         - 'kfold': K-fold cross-validation MSE.
+         - 'loo_penalized': penalized leave-one-out MSE criterion (a
+           penalized variant, not plain LOO).
+         - 'kfold': K-fold cross-validation MSE with fold-local scaling.
     optimal_k_random_state : int | None
         Seed for K-Fold splitting when optimal_k_method='kfold'; defaults to 42.
         With kfold, it must be in [0, 2**32 - 1]. Set to None for
