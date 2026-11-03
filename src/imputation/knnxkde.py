@@ -1,3 +1,4 @@
+import warnings
 from typing import Literal
 
 import numpy as np
@@ -82,17 +83,18 @@ def nan_std_euclidean_distances(data_receivers, data_givers, sigmas):
     missing_Y = np.isnan(Y)
     X[missing_X] = 0  # replace NaN with zeros
     Y[missing_Y] = 0
-    dist = euclidean_distances(X, Y, squared=True)
-    XX = X * X
-    YY = Y * Y
-    minus1 = np.dot(XX, missing_Y.T)
-    minus2 = np.dot(missing_X, YY.T)
-    dist = dist - minus1 - minus2  # adjust for missing values
-    plus1 = np.dot(missing_X, np.tile(sigmas**2, (Y.shape[0], 1)).T)
-    plus2 = np.dot(np.tile(sigmas**2, (X.shape[0], 1)), missing_Y.T)
-    minus3 = np.dot(np.dot(missing_X, np.diag(sigmas**2)), missing_Y.T)
-    dist = dist + plus1 + plus2 - minus3  # add the extra variances
-    return np.sqrt(dist)
+    with np.errstate(over="ignore", invalid="ignore"):
+        dist = euclidean_distances(X, Y, squared=True)
+        XX = X * X
+        YY = Y * Y
+        minus1 = np.dot(XX, missing_Y.T)
+        minus2 = np.dot(missing_X, YY.T)
+        dist = dist - minus1 - minus2  # adjust for missing values
+        plus1 = np.dot(missing_X, np.tile(sigmas**2, (Y.shape[0], 1)).T)
+        plus2 = np.dot(np.tile(sigmas**2, (X.shape[0], 1)), missing_Y.T)
+        minus3 = np.dot(np.dot(missing_X, np.diag(sigmas**2)), missing_Y.T)
+        dist = dist + plus1 + plus2 - minus3  # add the extra variances
+    return np.sqrt(np.maximum(dist, 0.0))
 
 
 class KNNxKDE:
@@ -120,8 +122,8 @@ class KNNxKDE:
 
     def __init__(
         self,
-        h=0.03,
-        tau=1.0 / 50.0,
+        h: float = 0.03,
+        tau: float = 1.0 / 50.0,
         metric: KNNxKdeMetric = "nan_std_eucl",
     ):
         self.h = h
@@ -152,7 +154,10 @@ class KNNxKDE:
             Returns None if imputation cannot be performed (no suitable donors).
         """
         (_n, d) = miss_data.shape
-        sigmas = np.nan_to_num(np.nanstd(miss_data, axis=0), nan=1.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sigmas = np.nanstd(miss_data, axis=0)
+        sigmas = np.nan_to_num(sigmas, nan=0.0, posinf=0.0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_samples = {}
 
@@ -185,9 +190,10 @@ class KNNxKDE:
             p_ij = softmax(-d_ij / self.tau, axis=1)
             p_ij = np.nan_to_num(p_ij, nan=0.0, posinf=0.0, neginf=0.0)
             row_sums = p_ij.sum(axis=1, keepdims=True)
-            if np.any(row_sums == 0):
+            bad_rows = (row_sums == 0) | ~np.isfinite(row_sums)
+            if np.any(bad_rows):
                 uniform = np.full_like(p_ij, 1.0 / p_ij.shape[1])
-                p_ij = np.where(row_sums == 0, uniform, p_ij)
+                p_ij = np.where(bad_rows, uniform, p_ij)
 
             for i1 in range(len(id_receivers)):
                 probs = p_ij[i1]
@@ -223,7 +229,10 @@ class KNNxKDE:
             Returns None if imputation cannot be performed.
         """
         (_n, d) = miss_data.shape
-        sigmas = np.nan_to_num(np.nanstd(miss_data, axis=0), nan=1.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sigmas = np.nanstd(miss_data, axis=0)
+        sigmas = np.nan_to_num(sigmas, nan=0.0, posinf=0.0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         imputed_data = np.copy(miss_data)
 
@@ -256,9 +265,10 @@ class KNNxKDE:
             p_ij = softmax(-d_ij / self.tau, axis=1)
             p_ij = np.nan_to_num(p_ij, nan=0.0, posinf=0.0, neginf=0.0)
             row_sums = p_ij.sum(axis=1, keepdims=True)
-            if np.any(row_sums == 0):
+            bad_rows = (row_sums == 0) | ~np.isfinite(row_sums)
+            if np.any(bad_rows):
                 uniform = np.full_like(p_ij, 1.0 / p_ij.shape[1])
-                p_ij = np.where(row_sums == 0, uniform, p_ij)
+                p_ij = np.where(bad_rows, uniform, p_ij)
 
             for i1 in range(len(id_receivers)):
                 probs = p_ij[i1]
@@ -294,7 +304,10 @@ class KNNxKDE:
             for each missing pattern.
         """
         (_n, d) = miss_data.shape
-        sigmas = np.nan_to_num(np.nanstd(miss_data, axis=0), nan=1.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sigmas = np.nanstd(miss_data, axis=0)
+        sigmas = np.nan_to_num(sigmas, nan=0.0, posinf=0.0)
         all_miss_patterns = np.unique(np.isnan(miss_data), axis=0)
         cells_distrib = {}  # store (weights, values)
 
@@ -327,9 +340,10 @@ class KNNxKDE:
             p_ij = softmax(-d_ij / self.tau, axis=1)
             p_ij = np.nan_to_num(p_ij, nan=0.0, posinf=0.0, neginf=0.0)
             row_sums = p_ij.sum(axis=1, keepdims=True)
-            if np.any(row_sums == 0):
+            bad_rows = (row_sums == 0) | ~np.isfinite(row_sums)
+            if np.any(bad_rows):
                 uniform = np.full_like(p_ij, 1.0 / p_ij.shape[1])
-                p_ij = np.where(row_sums == 0, uniform, p_ij)
+                p_ij = np.where(bad_rows, uniform, p_ij)
 
             for i1 in range(len(id_receivers)):
                 for i2 in range(d):

@@ -492,3 +492,28 @@ class TestGeometryValidation(unittest.TestCase):
                 missing_generator=Mcar(Rate(0.3)),
                 geometry_type=cast(GeometryType, "invalid"),
             )
+
+
+def test_mar_rejects_non_finite_chunk_bounds():
+    with pytest.raises(
+        ValueError, match="chunk_start must be strictly less than chunk_end"
+    ):
+        Mar(chunk_start=float("inf"), chunk_end=2.0, missing_values=1)
+
+
+def test_data_generator_rejects_non_integer_sample_size():
+    with pytest.raises(ValueError, match="sample_size must be >= 1"):
+        DataGenerator(
+            linear_interpolation_ratio=1.0,
+            sample_size=True,
+            missing_generator=NoAdditionalMissingValues(),
+        )
+
+
+def test_excel_preparator_rejects_nan_sample_size():
+    with pytest.raises(ValueError, match="sample_size must be >= 1"):
+        ExcelDataPreparator(
+            ExcelDatasetDescriptor("input", "target", "x.xlsx", "sheet"),
+            NoAdditionalMissingValues(),
+            sample_size=float("nan"),  # type: ignore[arg-type]
+        )
