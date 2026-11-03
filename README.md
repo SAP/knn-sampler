@@ -73,7 +73,10 @@ global randomness internally and is not fully reproducible.
 integer in `[0, 4294967295]`; `None` is Python-API-only) in the `[KnnSampler]`
 section of [`assets/hyperparameters.conf`](./assets/hyperparameters.conf). The
 scaler is fitted on each training fold; `loo_penalized` keeps global scaling
-on all complete-case rows. The value is validated for every method, but only
+on all complete-case rows. It uses the fast leave-one-out computation of
+Kanagawa (2024) (arXiv:2405.04919) with an additional (k+1)^2/k^2 penalty
+that penalizes small k. The kNNSampler paper uses plain LOOCV without this
+extra penalty. The value is validated for every method, but only
 `kfold` uses it.
 
 For Python use, load settings with `assets.config.load_config()`. Legacy
