@@ -4,6 +4,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 from src.data_preparation.data_description import DataFrameMLData
 from src.imputation import Imputer
+from src.imputation.imputer import validate_random_state
 from src.imputation.knnxkde import KNNxKDE, KNNxKdeMetric
 
 
@@ -55,6 +56,7 @@ class KNNxKDEImputer(Imputer):
         ValueError
             If imputation samples cannot be generated.
         """
+        random_state = validate_random_state(random_state)
         df = self.ml_data.df
         input_col = self.descriptor.input_column
         target_col = self.descriptor.target_column

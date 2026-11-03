@@ -1,5 +1,7 @@
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Literal
 
 import numpy as np
@@ -178,6 +180,19 @@ class Mar(MissingDataGenerator):
                 f"missing_values should be a non-negative integer or a Rate,"
                 f" got '{missing_values}'"
             )
+        try:
+            valid = (
+                math.isfinite(chunk_start)
+                and math.isfinite(chunk_end)
+                and chunk_start < chunk_end
+            )
+        except (TypeError, ValueError):
+            valid = False
+        if not valid:
+            raise ValueError(
+                "chunk_start must be strictly less than chunk_end, "
+                f"got chunk_start={chunk_start}, chunk_end={chunk_end}"
+            )
         self.chunk_start = chunk_start
         self.chunk_end = chunk_end
         self.missing_values = missing_values
@@ -293,6 +308,14 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         columns_to_keep: list[str] | None = None,
         random_state: int | None = None,
     ):
+        if sample_size is not None and (
+            isinstance(sample_size, bool)
+            or not isinstance(sample_size, Integral)
+            or sample_size < 1
+        ):
+            raise ValueError(f"sample_size must be >= 1 or None, got {sample_size}")
+        if sample_size is not None:
+            sample_size = int(sample_size)
         super().__init__(
             dataset_descriptor=dataset_descriptor,
             missing_generator=missing_generator,
@@ -302,26 +325,21 @@ class ExcelDataPreparator(DataPreparator[DataFrameMLData, ExcelDatasetDescriptor
         self.columns_to_keep = columns_to_keep if columns_to_keep is not None else []
 
     def prepare_data(self) -> DataFrameMLData:
-        if self.sample_size is None:
-            df = pd.read_excel(
-                io=self.dataset_descriptor.path,
-                sheet_name=self.dataset_descriptor.sheet_name,
-                usecols=[
-                    self.dataset_descriptor.input_column,
-                    self.dataset_descriptor.target_column,
-                    *self.columns_to_keep,
-                ],
-            )
-        else:
-            df = pd.read_excel(
-                io=self.dataset_descriptor.path,
-                sheet_name=self.dataset_descriptor.sheet_name,
-                usecols=[
-                    self.dataset_descriptor.input_column,
-                    self.dataset_descriptor.target_column,
-                    *self.columns_to_keep,
-                ],
-            ).sample(self.sample_size, random_state=self.random_state)
+        df = pd.read_excel(
+            io=self.dataset_descriptor.path,
+            sheet_name=self.dataset_descriptor.sheet_name,
+            usecols=[
+                self.dataset_descriptor.input_column,
+                self.dataset_descriptor.target_column,
+                *self.columns_to_keep,
+            ],
+        )
+        if self.sample_size is not None:
+            if self.sample_size > len(df):
+                raise ValueError(
+                    f"sample_size ({self.sample_size}) exceeds dataset size ({len(df)})"
+                )
+            df = df.sample(self.sample_size, random_state=self.random_state)
 
         # rename columns
         df = df.rename(
@@ -382,6 +400,12 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
                 f"geometry_type must be one of: {', '.join(repr(g) for g in GEOMETRY_TYPES)},"
                 f" got '{geometry_type}'"
             )
+        if (
+            isinstance(sample_size, bool)
+            or not isinstance(sample_size, Integral)
+            or sample_size < 1
+        ):
+            raise ValueError(f"sample_size must be >= 1, got {sample_size}")
         super().__init__(
             dataset_descriptor=(
                 DatasetDescriptor("X", "Y")
@@ -389,12 +413,12 @@ class DataGenerator(DataPreparator[DataFrameMLData, DatasetDescriptor]):
                 else dataset_descriptor
             ),
             missing_generator=missing_generator,
-            sample_size=sample_size,
+            sample_size=int(sample_size),
             random_state=random_state,
         )
-        self.linear_interpolation_ratio = linear_interpolation_ratio
+        self.linear_interpolation_ratio: float = linear_interpolation_ratio
         self.geometry_type: GeometryType = geometry_type
-        self.excel_path = excel_path
+        self.excel_path: str | None = excel_path
         # Narrow the sample_size attribute to int: DataGenerator requires an
         # explicit sample size, unlike ExcelDataPreparator which accepts None.
         self.sample_size: int

@@ -24,6 +24,20 @@ from src.data_preparation.dataset_description import (
 )
 
 
+def test_mar_rejects_inverted_chunk_range():
+    with pytest.raises(
+        ValueError, match="chunk_start must be strictly less than chunk_end"
+    ):
+        Mar(chunk_start=5.0, chunk_end=2.0, missing_values=1)
+
+
+def test_mar_rejects_nan_chunk_bounds():
+    with pytest.raises(
+        ValueError, match="chunk_start must be strictly less than chunk_end"
+    ):
+        Mar(chunk_start=float("nan"), chunk_end=2.0, missing_values=1)
+
+
 def test_spawned_seeds_are_replayable_and_separate():
     first, second = split_random_state(42)
     assert (first, second) == split_random_state(42)
@@ -478,3 +492,28 @@ class TestGeometryValidation(unittest.TestCase):
                 missing_generator=Mcar(Rate(0.3)),
                 geometry_type=cast(GeometryType, "invalid"),
             )
+
+
+def test_mar_rejects_non_finite_chunk_bounds():
+    with pytest.raises(
+        ValueError, match="chunk_start must be strictly less than chunk_end"
+    ):
+        Mar(chunk_start=float("inf"), chunk_end=2.0, missing_values=1)
+
+
+def test_data_generator_rejects_non_integer_sample_size():
+    with pytest.raises(ValueError, match="sample_size must be >= 1"):
+        DataGenerator(
+            linear_interpolation_ratio=1.0,
+            sample_size=True,
+            missing_generator=NoAdditionalMissingValues(),
+        )
+
+
+def test_excel_preparator_rejects_nan_sample_size():
+    with pytest.raises(ValueError, match="sample_size must be >= 1"):
+        ExcelDataPreparator(
+            ExcelDatasetDescriptor("input", "target", "x.xlsx", "sheet"),
+            NoAdditionalMissingValues(),
+            sample_size=float("nan"),  # type: ignore[arg-type]
+        )

@@ -31,8 +31,8 @@ def main() -> None:
 
     else:
         results = do_imputation(*imputers, random_state=config.execution_random_state)
-    print("\nImputation done, plotting results...")
     if config.plot_results:
+        print("\nImputation done, plotting results...")
         do_plot_results(
             results,
             config.missing_values,

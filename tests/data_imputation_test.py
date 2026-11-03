@@ -2,6 +2,7 @@ import unittest
 from typing import Literal
 
 import pandas as pd
+import pytest
 
 from src.data_preparation.data_description import DataFrameMLData
 from src.data_preparation.data_preparation import (
@@ -134,9 +135,19 @@ class TestMultipleImputation(unittest.TestCase):
         nb_iterations = 5
         imputer = KnnImputer(ml_data=self.prep_gen)
         results = do_imputation(imputer, iterations=nb_iterations)
-        # assert each element are of size 1 because KnnImputer should always produce the same data imputation
         set_result = {
             (tuple(map(tuple, df.values)), tuple(map(tuple, df.columns)))
             for df, _ in results[imputer]
         }
         self.assertEqual(1, len(set_result))
+
+
+def test_knnxkde_rejects_invalid_random_state():
+    from src.imputation.knnxkdeimputer import KNNxKDEImputer
+    from tests.testutils import prepare_generated_data
+
+    prepared, _actual, _generator = prepare_generated_data()
+    imputer = KNNxKDEImputer(ml_data=prepared)
+    imputer.fit()
+    with pytest.raises(ValueError, match=r"random_state.*non-negative integer"):
+        imputer.execute(random_state=True)
